@@ -1,10 +1,10 @@
 package ru.securitytrip.backend.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
+@Setter
+@Getter
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -20,4 +20,5 @@ public class MoveRequest {
     @Schema(description = "Координата Y клетки, по которой производится выстрел", 
             example = "3", minimum = "0", maximum = "9", required = true)
     private int y;
-} 
+
+}

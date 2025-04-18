@@ -17,9 +17,12 @@ import ru.securitytrip.backend.dto.GameDto;
 import ru.securitytrip.backend.dto.MoveRequest;
 import ru.securitytrip.backend.dto.MoveResponse;
 import ru.securitytrip.backend.dto.ShipDto;
+import ru.securitytrip.backend.model.DifficultyLevel;
 import ru.securitytrip.backend.service.GameService;
 
 import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
 
 @RestController
 @RequestMapping("/game")
@@ -48,13 +51,89 @@ public class GameController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
         
-        // Преобразуем имя пользователя в ID (в данном случае предполагаем, что это число)
-        Long userId = Long.parseLong(username);
+        // Используем имя пользователя вместо попытки преобразовать его в Long
+        Long userId = getUserIdOrGenerateFromUsername(username);
         
         // Создаем игру через сервис
         GameDto gameDto = gameService.createSinglePlayerGame(userId, request);
         
         return ResponseEntity.ok(gameDto);
+    }
+    
+    @Operation(summary = "Создание одиночной игры с автоматической расстановкой кораблей", 
+               description = "Создает новую игру с автоматически сгенерированной расстановкой кораблей игрока")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Игра успешно создана",
+                    content = @Content(mediaType = "application/json", 
+                            schema = @Schema(implementation = GameDto.class))),
+            @ApiResponse(responseCode = "400", description = "Некорректные параметры",
+                    content = @Content),
+            @ApiResponse(responseCode = "401", description = "Не авторизован",
+                    content = @Content)
+    })
+    @PostMapping("/singleplayer/auto")
+    public ResponseEntity<GameDto> createSinglePlayerGameWithAutoPlacement(
+            @Parameter(description = "Параметры игры", required = true)
+            @RequestBody Map<String, String> request) {
+        // Получаем ID текущего пользователя из контекста безопасности
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String username = authentication.getName();
+        
+        // Используем имя пользователя вместо попытки преобразовать его в Long
+        Long userId = getUserIdOrGenerateFromUsername(username);
+        
+        // Получаем уровень сложности (по умолчанию MEDIUM)
+        DifficultyLevel difficultyLevel = DifficultyLevel.MEDIUM;
+        if (request.containsKey("difficultyLevel")) {
+            try {
+                difficultyLevel = DifficultyLevel.valueOf(request.get("difficultyLevel").toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Если некорректное значение, используем MEDIUM
+            }
+        }
+        
+        // Получаем стратегию расстановки (по умолчанию RANDOM)
+        String placementStrategy = "RANDOM";
+        if (request.containsKey("placementStrategy")) {
+            String strategy = request.get("placementStrategy").toUpperCase();
+            if (strategy.equals("SHORE") || strategy.equals("ASYMMETRIC") || strategy.equals("RANDOM")) {
+                placementStrategy = strategy;
+            }
+        }
+        
+        // Генерируем расстановку кораблей
+        List<ShipDto> ships = gameService.generatePlayerShips(placementStrategy);
+        
+        // Обходим проблему с инициализацией объекта
+        // Создаем запрос на основе готовых данных
+        CreateSinglePlayerGameRequest gameRequest = createGameRequest(ships, difficultyLevel);
+        
+        // Создаем игру через сервис
+        GameDto gameDto = gameService.createSinglePlayerGame(userId, gameRequest);
+        
+        return ResponseEntity.ok(gameDto);
+    }
+    
+    // Вспомогательный метод для создания объекта запроса
+    private CreateSinglePlayerGameRequest createGameRequest(List<ShipDto> ships, DifficultyLevel level) {
+        // Создаем новый объект запроса
+        CreateSinglePlayerGameRequest request = new CreateSinglePlayerGameRequest();
+        
+        // Получаем список кораблей
+        List<ShipDto> shipsList = new ArrayList<>(ships);
+        
+        // Используем другой конструктор для обхода проблемы
+        return new CreateSinglePlayerGameRequest() {
+            @Override
+            public List<ShipDto> getShips() {
+                return shipsList;
+            }
+            
+            @Override
+            public DifficultyLevel getDifficultyLevel() {
+                return level;
+            }
+        };
     }
     
     @Operation(summary = "Начало игры", 
@@ -80,8 +159,8 @@ public class GameController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
         
-        // Преобразуем имя пользователя в ID
-        Long userId = Long.parseLong(username);
+        // Используем имя пользователя вместо попытки преобразовать его в Long
+        Long userId = getUserIdOrGenerateFromUsername(username);
         
         // Начинаем игру через сервис
         GameDto gameDto = gameService.startGame(gameId, userId);
@@ -110,8 +189,8 @@ public class GameController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
         
-        // Преобразуем имя пользователя в ID
-        Long userId = Long.parseLong(username);
+        // Используем имя пользователя вместо попытки преобразовать его в Long
+        Long userId = getUserIdOrGenerateFromUsername(username);
         
         // Делаем ход через сервис
         MoveResponse response = gameService.playerMove(userId, moveRequest);
@@ -140,8 +219,8 @@ public class GameController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
         
-        // Преобразуем имя пользователя в ID
-        Long userId = Long.parseLong(username);
+        // Используем имя пользователя вместо попытки преобразовать его в Long
+        Long userId = getUserIdOrGenerateFromUsername(username);
         
         // Получаем игру по ID
         GameDto gameDto = gameService.getGameById(gameId, userId);
@@ -169,5 +248,53 @@ public class GameController {
         List<ShipDto> ships = gameService.generatePlayerShips(strategy);
         
         return ResponseEntity.ok(ships);
+    }
+    
+    @Operation(summary = "Сгенерировать расстановку кораблей (POST-метод)", 
+              description = "Автоматически генерирует расстановку кораблей для игрока по выбранной стратегии")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Расстановка успешно сгенерирована",
+                   content = @Content(mediaType = "application/json", 
+                           schema = @Schema(implementation = ShipDto.class))),
+            @ApiResponse(responseCode = "400", description = "Некорректная стратегия",
+                   content = @Content),
+            @ApiResponse(responseCode = "401", description = "Не авторизован",
+                   content = @Content)
+    })
+    @PostMapping("/generate-ships")
+    public ResponseEntity<List<ShipDto>> generateShipsPost(
+            @Parameter(description = "Стратегия расстановки", required = true)
+            @RequestBody Map<String, String> request) {
+        // Получаем стратегию расстановки (по умолчанию RANDOM)
+        String placementStrategy = "RANDOM";
+        if (request.containsKey("strategy")) {
+            String strategy = request.get("strategy").toUpperCase();
+            if (strategy.equals("SHORE") || strategy.equals("ASYMMETRIC") || strategy.equals("RANDOM")) {
+                placementStrategy = strategy;
+            }
+        }
+        
+        // Генерируем корабли через сервис
+        List<ShipDto> ships = gameService.generatePlayerShips(placementStrategy);
+        
+        return ResponseEntity.ok(ships);
+    }
+
+    /**
+     * Получает идентификатор пользователя или генерирует его из имени пользователя.
+     * Если имя пользователя может быть преобразовано в Long, возвращает его.
+     * В противном случае генерирует хеш-код на основе имени пользователя.
+     * 
+     * @param username Имя пользователя
+     * @return Идентификатор пользователя
+     */
+    private Long getUserIdOrGenerateFromUsername(String username) {
+        try {
+            // Пытаемся преобразовать имя пользователя в Long
+            return Long.parseLong(username);
+        } catch (NumberFormatException e) {
+            // Если не удалось, генерируем положительный хеш на основе имени пользователя
+            return Math.abs((long) username.hashCode());
+        }
     }
 }

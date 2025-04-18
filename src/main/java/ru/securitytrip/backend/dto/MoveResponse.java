@@ -1,10 +1,10 @@
 package ru.securitytrip.backend.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
+@Setter
+@Getter
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -28,4 +28,5 @@ public class MoveResponse {
         this.sunk = sunk;
         this.gameOver = gameOver;
     }
-} 
+
+}

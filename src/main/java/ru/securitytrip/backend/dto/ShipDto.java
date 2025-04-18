@@ -1,10 +1,10 @@
 package ru.securitytrip.backend.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
+@Setter
+@Getter
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,4 +26,12 @@ public class ShipDto {
             example = "[false, true, false, false]",
             nullable = true)
     private boolean[] hits; // null для создания корабля, заполнено для существующего
+    
+    public boolean isHorizontal() {
+        return isHorizontal;
+    }
+    
+    public void setHorizontal(boolean horizontal) {
+        isHorizontal = horizontal;
+    }
 } 

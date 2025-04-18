@@ -262,7 +262,7 @@ public class GameService {
         boolean placed = false;
         int attempts = 0;
         
-        while (!placed && attempts < 100) {
+        while (!placed && attempts < 500) {  // Увеличиваем количество попыток с 100 до 500
             int x = random.nextInt(10);
             int y = random.nextInt(10);
             boolean horizontal = random.nextBoolean();
@@ -277,7 +277,50 @@ public class GameService {
         }
         
         if (!placed) {
-            throw new RuntimeException("Не удалось разместить корабль размером " + shipSize);
+            // Вместо выброса исключения создаем запасной вариант размещения
+            logger.warn("Не удалось разместить корабль размером {} за {} попыток, пробуем очистить часть доски", shipSize, attempts);
+            
+            // Очищаем некоторые ячейки доски (удаляем зоны вокруг кораблей)
+            for (int i = 0; i < 10; i++) {
+                for (int j = 0; j < 10; j++) {
+                    if (board[i][j] == 2) { // Если это зона вокруг корабля
+                        board[i][j] = 0;    // Очищаем её
+                    }
+                }
+            }
+            
+            // Пытаемся снова разместить корабль с повышенным лимитом попыток
+            attempts = 0;
+            while (!placed && attempts < 500) {
+                int x = random.nextInt(10);
+                int y = random.nextInt(10);
+                boolean horizontal = random.nextBoolean();
+                
+                if (canPlaceShip(board, x, y, shipSize, horizontal)) {
+                    placeShipOnBoard(board, x, y, shipSize, horizontal);
+                    result.add(new Ship(shipSize, x, y, horizontal));
+                    placed = true;
+                }
+                
+                attempts++;
+            }
+            
+            // Если и это не помогло, создаем корабль с минимальным размером в случайном месте
+            if (!placed) {
+                logger.warn("Не удалось разместить корабль стандартным способом, создаем альтернативный вариант");
+                // Создаем корабль меньшего размера (1), который должен поместиться
+                for (int i = 0; i < 10; i++) {
+                    for (int j = 0; j < 10; j++) {
+                        if (board[i][j] == 0) { // Нашли свободную клетку
+                            placeShipOnBoard(board, j, i, 1, true);
+                            result.add(new Ship(1, j, i, true));
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if (placed) break;
+                }
+            }
         }
         
         return result;
@@ -437,6 +480,9 @@ public class GameService {
             throw new RuntimeException("По этой клетке уже стреляли");
         }
         
+        // Логируем ход игрока
+        logger.info("Ход игрока {} по координатам x={}, y={}", userId, moveRequest.getX(), moveRequest.getY());
+        
         // Получаем информацию о кораблях компьютера
         List<Ship> computerShips;
         try {
@@ -464,9 +510,15 @@ public class GameService {
         if (hit) {
             // Попадание (3)
             boardArray[moveRequest.getY()][moveRequest.getX()] = 3;
+            logger.info("Игрок {} ПОПАЛ по координатам x={}, y={}", userId, moveRequest.getX(), moveRequest.getY());
+            if (sunk) {
+                logger.info("Игрок {} ПОТОПИЛ корабль размером {} по координатам x={}, y={}", 
+                    userId, hitShip.getSize(), moveRequest.getX(), moveRequest.getY());
+            }
         } else {
             // Промах (2)
             boardArray[moveRequest.getY()][moveRequest.getX()] = 2;
+            logger.info("Игрок {} ПРОМАХНУЛСЯ по координатам x={}, y={}", userId, moveRequest.getX(), moveRequest.getY());
         }
         
         // Обновляем доску
@@ -493,9 +545,12 @@ public class GameService {
         // Если игра закончилась, обновляем статус
         if (gameOver) {
             game.setGameState(GameState.PLAYER_WON);
+            logger.info("Игрок ВЫИГРАЛ игру {}", game.getId());
         } else if (!hit) {
             // Если промах, переключаем ход на компьютер
             game.toggleTurn();
+            logger.info("Передаём ход компьютеру");
+            computerMove(game);
         }
         
         // Сохраняем изменения
@@ -503,11 +558,6 @@ public class GameService {
         
         // Формируем ответ
         MoveResponse response = new MoveResponse(hit, sunk, gameOver);
-        
-        // Если игра не закончилась и был промах, делаем ход компьютера
-        if (!gameOver && !hit) {
-            computerMove(game);
-        }
         
         // Обновляем состояние игры для ответа
         response.setGameState(convertToGameDto(game, userId));
@@ -517,6 +567,23 @@ public class GameService {
     
     @Transactional
     public void computerMove(Game game) {
+        computerMove(game, 0);
+    }
+    
+    /**
+     * Внутренний метод для хода компьютера с ограничением на количество последовательных ходов
+     * @param game Текущая игра
+     * @param moveCount Счетчик последовательных ходов
+     */
+    private void computerMove(Game game, int moveCount) {
+        // Защита от бесконечной рекурсии - не более 10 последовательных ходов компьютера
+        if (moveCount >= 10) {
+            logger.warn("Достигнуто максимальное количество последовательных ходов компьютера ({}), передаем ход игроку", moveCount);
+            game.toggleTurn();
+            gameRepository.save(game);
+            return;
+        }
+        
         // Получаем доску игрока
         GameBoard playerBoard = game.getPlayerBoard();
         
@@ -527,32 +594,51 @@ public class GameService {
         DifficultyLevel difficultyLevel = game.getDifficultyLevel();
         
         // Координаты выстрела
-        int x = 0, y = 0;
+        int[] shotCoordinates = new int[2]; // [x, y]
         boolean validMove = false;
         
         // Выбираем стратегию в зависимости от сложности
         switch (difficultyLevel) {
             case EASY:
                 // Полностью случайные выстрелы
-                validMove = makeRandomShot(boardArray, x, y);
+                logger.info("Компьютер использует стратегию EASY (случайные выстрелы)");
+                validMove = makeRandomShot(boardArray, shotCoordinates);
                 break;
                 
             case MEDIUM:
                 // Выстрелы по шахматной доске
-                validMove = makeCheckerboardShot(boardArray, x, y);
+                logger.info("Компьютер использует стратегию MEDIUM (шахматная доска)");
+                validMove = makeCheckerboardShot(boardArray, shotCoordinates);
                 break;
                 
             case HARD:
                 // Случайные выстрелы с добиванием кораблей
-                validMove = makeSmartShot(boardArray, x, y, game);
+                logger.info("Компьютер использует стратегию HARD (добивание)");
+                validMove = makeSmartShot(boardArray, shotCoordinates, game);
                 break;
                 
             default:
                 // По умолчанию - случайный выстрел
-                validMove = makeRandomShot(boardArray, x, y);
+                logger.info("Компьютер использует стратегию по умолчанию");
+                validMove = makeRandomShot(boardArray, shotCoordinates);
         }
         
         if (validMove) {
+            int x = shotCoordinates[0];
+            int y = shotCoordinates[1];
+            
+            // Логируем ход компьютера
+            logger.info("Ход компьютера в игре {} по координатам x={}, y={}", game.getId(), x, y);
+            
+            // Дополнительная проверка, чтобы убедиться, что клетка еще не обстреляна
+            if (boardArray[y][x] == 2 || boardArray[y][x] == 3) {
+                logger.error("Ошибка в логике игры: компьютер пытается выстрелить в уже обстрелянную клетку x={}, y={}", x, y);
+                // Если это происходит, переключаем ход на игрока и завершаем метод
+                game.toggleTurn();
+                gameRepository.save(game);
+                return;
+            }
+            
             // Получаем информацию о кораблях игрока
             List<Ship> playerShips;
             try {
@@ -578,9 +664,17 @@ public class GameService {
             if (hit) {
                 // Попадание (3)
                 boardArray[y][x] = 3;
+                logger.info("Компьютер ПОПАЛ по координатам x={}, y={}", x, y);
+                
+                // Проверяем, потоплен ли корабль
+                if (hitShip.isSunk()) {
+                    logger.info("Компьютер ПОТОПИЛ корабль размером {} по координатам x={}, y={}", 
+                        hitShip.getSize(), x, y);
+                }
             } else {
                 // Промах (2)
                 boardArray[y][x] = 2;
+                logger.info("Компьютер ПРОМАХНУЛСЯ по координатам x={}, y={}", x, y);
             }
             
             // Обновляем доску
@@ -612,10 +706,11 @@ public class GameService {
                 // Если игра закончилась, обновляем статус
                 if (gameOver) {
                     game.setGameState(GameState.COMPUTER_WON);
+                    logger.info("Компьютер ВЫИГРАЛ игру {}", game.getId());
                 } else {
-                    // Если попал, компьютер ходит еще раз (рекурсивно)
+                    // Если попал, компьютер ходит еще раз (рекурсивно) с увеличением счетчика ходов
                     gameRepository.save(game);
-                    computerMove(game);
+                    computerMove(game, moveCount + 1);
                     return;
                 }
             } else {
@@ -634,46 +729,61 @@ public class GameService {
     }
     
     // Метод для случайного выстрела (для EASY)
-    private boolean makeRandomShot(int[][] boardArray, int x, int y) {
+    private boolean makeRandomShot(int[][] boardArray, int[] coordinates) {
         boolean validMove = false;
-        while (!validMove) {
-            x = random.nextInt(10);
-            y = random.nextInt(10);
+        int attempts = 0;
+        int maxAttempts = 100; // Предотвращение бесконечного цикла
+        
+        while (!validMove && attempts < maxAttempts) {
+            int x = random.nextInt(10);
+            int y = random.nextInt(10);
             
             // Проверяем, что по этой клетке еще не стреляли
             if (boardArray[y][x] != 2 && boardArray[y][x] != 3) {
+                coordinates[0] = x;
+                coordinates[1] = y;
                 validMove = true;
             }
+            
+            attempts++;
         }
+        
+        if (!validMove) {
+            logger.warn("Не удалось найти клетку для случайного выстрела после {} попыток", maxAttempts);
+        }
+        
         return validMove;
     }
     
     // Метод для выстрела по шахматной доске (для MEDIUM)
-    private boolean makeCheckerboardShot(int[][] boardArray, int x, int y) {
+    private boolean makeCheckerboardShot(int[][] boardArray, int[] coordinates) {
         boolean validMove = false;
         
         // Попытки найти ход по шахматному паттерну
         for (int attempts = 0; attempts < 100 && !validMove; attempts++) {
-            x = random.nextInt(10);
-            y = random.nextInt(10);
+            int x = random.nextInt(10);
+            int y = random.nextInt(10);
             
             // Проверяем, что клетка следует шахматному паттерну
             // (сумма координат четная), и по ней еще не стреляли
             if ((x + y) % 2 == 0 && boardArray[y][x] != 2 && boardArray[y][x] != 3) {
+                coordinates[0] = x;
+                coordinates[1] = y;
                 validMove = true;
             }
         }
         
         // Если не удалось найти ход по шахматному паттерну, делаем случайный ход
         if (!validMove) {
-            return makeRandomShot(boardArray, x, y);
+            logger.info("Не удалось найти подходящую клетку по шахматной стратегии, переключаемся на случайную");
+            return makeRandomShot(boardArray, coordinates);
         }
         
         return validMove;
     }
     
     // Метод для умного выстрела с добиванием кораблей (для HARD)
-    private boolean makeSmartShot(int[][] boardArray, int x, int y, Game game) {
+    private boolean makeSmartShot(int[][] boardArray, int[] coordinates, Game game) {
         boolean validMove = false;
         
         // Пытаемся атаковать вокруг последнего попадания, если оно было
@@ -688,8 +798,8 @@ public class GameService {
                 // Проверяем, что координаты в пределах поля и клетка не простреляна
                 if (newX >= 0 && newX < 10 && newY >= 0 && newY < 10 && 
                         boardArray[newY][newX] != 2 && boardArray[newY][newX] != 3) {
-                    x = newX;
-                    y = newY;
+                    coordinates[0] = newX;
+                    coordinates[1] = newY;
                     validMove = true;
                     break;
                 }
@@ -698,7 +808,8 @@ public class GameService {
         
         // Если не удалось найти умный ход, делаем случайный
         if (!validMove) {
-            return makeRandomShot(boardArray, x, y);
+            logger.info("Не удалось найти подходящую клетку вокруг предыдущего попадания, переключаемся на случайную");
+            return makeRandomShot(boardArray, coordinates);
         }
         
         return validMove;

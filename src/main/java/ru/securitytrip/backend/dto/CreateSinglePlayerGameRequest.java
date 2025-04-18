@@ -4,10 +4,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.Getter;
 import ru.securitytrip.backend.model.DifficultyLevel;
 
 import java.util.List;
 
+@Setter
+@Getter
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -23,4 +27,5 @@ public class CreateSinglePlayerGameRequest {
             allowableValues = {"EASY", "MEDIUM", "HARD"},
             defaultValue = "MEDIUM")
     private DifficultyLevel difficultyLevel = DifficultyLevel.MEDIUM;
-} 
+
+}

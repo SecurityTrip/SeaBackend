@@ -1,14 +1,14 @@
 package ru.securitytrip.backend.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import ru.securitytrip.backend.model.GameMode;
 import ru.securitytrip.backend.model.GameState;
 
 import java.util.List;
 
+@Setter
+@Getter
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
