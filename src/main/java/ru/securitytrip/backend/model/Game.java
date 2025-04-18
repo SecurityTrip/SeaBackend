@@ -16,8 +16,21 @@ public class Game {
     @GeneratedValue(strategy = GenerationType.SEQUENCE)
     private Long id;
 
-    @Enumerated
-    GameMode mode;
+    @Enumerated(EnumType.STRING)
+    private GameMode mode;
+    
+    @Enumerated(EnumType.STRING)
+    private GameState gameState = GameState.WAITING;
+    
+    @Enumerated(EnumType.STRING)
+    private DifficultyLevel difficultyLevel = DifficultyLevel.MEDIUM;
+    
+    // Координаты последнего удачного выстрела (для ИИ сложного уровня)
+    private int lastHitX = -1;
+    private int lastHitY = -1;
+    
+    // true - ход игрока, false - ход компьютера
+    private boolean playerTurn = true;
 
     // Связь "одна игра содержит две доски"
     @OneToMany(
@@ -35,5 +48,30 @@ public class Game {
         } else {
             throw new IllegalStateException("Game can only have 2 boards");
         }
+    }
+    
+    // Получить доску игрока
+    public GameBoard getPlayerBoard() {
+        for (GameBoard board : boards) {
+            if (!board.isComputer()) {
+                return board;
+            }
+        }
+        return null;
+    }
+    
+    // Получить доску компьютера
+    public GameBoard getComputerBoard() {
+        for (GameBoard board : boards) {
+            if (board.isComputer()) {
+                return board;
+            }
+        }
+        return null;
+    }
+    
+    // Переключение хода
+    public void toggleTurn() {
+        this.playerTurn = !this.playerTurn;
     }
 }

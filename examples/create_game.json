@@ -1,0 +1,64 @@
+{
+  "ships": [
+    {
+      "size": 4,
+      "x": 0,
+      "y": 0,
+      "horizontal": true
+    },
+    {
+      "size": 3,
+      "x": 0,
+      "y": 2,
+      "horizontal": true
+    },
+    {
+      "size": 3,
+      "x": 5,
+      "y": 0,
+      "horizontal": false
+    },
+    {
+      "size": 2,
+      "x": 2,
+      "y": 4,
+      "horizontal": true
+    },
+    {
+      "size": 2,
+      "x": 8,
+      "y": 3,
+      "horizontal": false
+    },
+    {
+      "size": 2,
+      "x": 5,
+      "y": 6,
+      "horizontal": true
+    },
+    {
+      "size": 1,
+      "x": 0,
+      "y": 6,
+      "horizontal": true
+    },
+    {
+      "size": 1,
+      "x": 0,
+      "y": 8,
+      "horizontal": true
+    },
+    {
+      "size": 1,
+      "x": 7,
+      "y": 8,
+      "horizontal": true
+    },
+    {
+      "size": 1,
+      "x": 9,
+      "y": 9,
+      "horizontal": true
+    }
+  ]
+} 

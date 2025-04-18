@@ -77,4 +77,20 @@ public class GameBoard {
         
         return board;
     }
+
+    public void setBoardState(String boardState) {
+        this.boardState = boardState;
+    }
+    
+    public String getBoardState() {
+        return this.boardState;
+    }
+    
+    public void setShipsData(String shipsData) {
+        this.shipsData = shipsData;
+    }
+    
+    public String getShipsData() {
+        return this.shipsData;
+    }
 }
