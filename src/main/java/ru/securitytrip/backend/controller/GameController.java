@@ -24,6 +24,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 
+/**
+ * # WebSocket API для одиночной игры в морской бой
+ *
+ * ## Подключение
+ * ws://<host>:<port>/ws (STOMP/SockJS)
+ *
+ * ## Каналы и сообщения:
+ *
+ * - **Создать игру**
+ *   - Отправить: /app/singleplayer.create (CreateSinglePlayerGameRequest)
+ *   - Получить: /topic/singleplayer/game (GameDto)
+ *
+ * - **Сделать ход**
+ *   - Отправить: /app/singleplayer.move (MoveRequest)
+ *   - Получить: /topic/singleplayer/move (MoveResponse)
+ *
+ * - **Получить состояние игры**
+ *   - Отправить: /app/singleplayer.state (gameId: Long)
+ *   - Получить: /topic/singleplayer/state (GameDto)
+ *
+ * Пример работы с WebSocket описан в GameWebSocketController.
+ */
+
 @RestController
 @RequestMapping("/game")
 @Tag(name = "Морской Бой", description = "API для управления игрой в морской бой")
