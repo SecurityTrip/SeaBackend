@@ -25,7 +25,13 @@ public class ShipDto {
     @Schema(description = "Массив попаданий по клеткам корабля (true - клетка поражена)",
             example = "[false, true, false, false]",
             nullable = true)
-    private boolean[] hits; // null для создания корабля, заполнено для существующего
+    private boolean[] hits; // null для создания корабля, заполнено для существующего 
+    
+    @Schema(description = "Список координат клеток корабля (каждый элемент — [x, y])", example = "[[0,0],[0,1],[0,2]]", nullable = true)
+    private java.util.List<int[]> positions;
+
+    @Schema(description = "Список попаданий по кораблю (каждый элемент — [x, y] — координата попадания)", example = "[[0,1],[0,2]]", nullable = true)
+    private java.util.List<int[]> hitsList;
     
     public boolean isHorizontal() {
         return isHorizontal;
@@ -34,4 +40,4 @@ public class ShipDto {
     public void setHorizontal(boolean horizontal) {
         isHorizontal = horizontal;
     }
-} 
+}

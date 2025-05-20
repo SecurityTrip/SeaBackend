@@ -28,4 +28,14 @@ public class GameBoardDto {
     public boolean isComputer() {
         return isComputer;
     }
-} 
+
+    public void setBoard(int[][] board) {
+        this.board = board;
+    }
+    public void setShips(java.util.List<ShipDto> ships) {
+        this.ships = ships;
+    }
+    public void setComputer(boolean isComputer) {
+        this.isComputer = isComputer;
+    }
+}

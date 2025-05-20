@@ -15,7 +15,10 @@ import ru.securitytrip.backend.repository.GameRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 @Service
 public class GameService {
@@ -36,6 +39,21 @@ public class GameService {
     // Стандартные размеры кораблей для морского боя
     private static final int[] STANDARD_SHIP_SIZES = {4, 3, 3, 2, 2, 2, 1, 1, 1, 1};
     
+    // Хранилище комнат (gameCode -> MultiplayerRoom)
+    private final Map<String, MultiplayerRoom> multiplayerRooms = new ConcurrentHashMap<>();
+
+    // Внутренний класс для хранения состояния комнаты
+    private static class MultiplayerRoom {
+        Long player1Id;
+        List<ShipDto> player1Ships;
+        int[][] player1Board; // 0 - пусто, 1 - корабль, 2 - промах, 3 - попадание
+        Long player2Id;
+        List<ShipDto> player2Ships;
+        int[][] player2Board;
+        String currentTurn; // "player1" или "player2"
+        GameDto gameState;
+    }
+
     @Transactional
     public GameDto createSinglePlayerGame(Long userId, CreateSinglePlayerGameRequest request) {
         logger.info("Создание одиночной игры для пользователя: {}", userId);
@@ -632,7 +650,7 @@ public class GameService {
             
             // Дополнительная проверка, чтобы убедиться, что клетка еще не обстреляна
             if (boardArray[y][x] == 2 || boardArray[y][x] == 3) {
-                logger.error("Ошибка в логике игры: компьютер пытается выстрелить в уже обстрелянную клетку x={}, y={}", x, y);
+                logger.error("Ошибка в логике игры: компьютер пытается выстрелить в уже обстреляную клетку x={}, y={}", x, y);
                 // Если это происходит, переключаем ход на игрока и завершаем метод
                 game.toggleTurn();
                 gameRepository.save(game);
@@ -885,4 +903,62 @@ public class GameService {
         // Преобразуем Ship в ShipDto для передачи клиенту
         return ships.stream().map(this::convertToShipDto).collect(Collectors.toList());
     }
-} 
+
+    // Создание мультиплеерной игры, возвращает сгенерированный код
+    public String createMultiplayerGame(Long userId, List<ShipDto> ships) {
+        String code = java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        MultiplayerRoom room = new MultiplayerRoom();
+        room.player1Id = userId;
+        room.player1Ships = ships;
+        room.player1Board = new int[10][10];
+        // Заполняем доску и positions для кораблей игрока 1
+        for (ShipDto ship : ships) {
+            if (ship.getPositions() == null) {
+                ship.setPositions(generateShipPositions(ship));
+            }
+            for (int[] pos : ship.getPositions()) {
+                room.player1Board[pos[1]][pos[0]] = 1;
+            }
+        }
+        room.currentTurn = "player1";
+        room.gameState = new GameDto();
+        multiplayerRooms.put(code, room);
+        return code;
+    }
+
+    // Подключение к игре по коду, возвращает DTO игры
+    public GameDto joinMultiplayerGame(String gameCode, Long userId, List<ShipDto> ships) {
+        MultiplayerRoom room = multiplayerRooms.get(gameCode);
+        if (room == null || room.player2Id != null) {
+            throw new RuntimeException("Комната не найдена или уже заполнена");
+        }
+        room.player2Id = userId;
+        room.player2Ships = ships;
+        room.player2Board = new int[10][10];
+        // Заполняем доску и positions для кораблей игрока 2
+        for (ShipDto ship : ships) {
+            if (ship.getPositions() == null) {
+                ship.setPositions(generateShipPositions(ship));
+            }
+            for (int[] pos : ship.getPositions()) {
+                room.player2Board[pos[1]][pos[0]] = 1;
+            }
+        }
+        return room.gameState;
+    }
+
+    // Генерация позиций корабля по x, y, size, isHorizontal
+    private java.util.List<int[]> generateShipPositions(ShipDto ship) {
+        java.util.List<int[]> positions = new java.util.ArrayList<>();
+        int x = ship.getX();
+        int y = ship.getY();
+        for (int i = 0; i < ship.getSize(); i++) {
+            if (ship.isHorizontal()) {
+                positions.add(new int[]{x + i, y});
+            } else {
+                positions.add(new int[]{x, y + i});
+            }
+        }
+        return positions;
+    }
+}

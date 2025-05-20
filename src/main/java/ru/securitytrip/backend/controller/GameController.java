@@ -50,6 +50,7 @@ import java.util.ArrayList;
 
 @RestController
 @RequestMapping("/game")
+@CrossOrigin(origins = "http://localhost")
 @Tag(name = "Морской Бой", description = "API для управления игрой в морской бой")
 public class GameController {
 

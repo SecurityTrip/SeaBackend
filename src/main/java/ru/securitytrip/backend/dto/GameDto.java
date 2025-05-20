@@ -33,5 +33,21 @@ public class GameDto {
     
     @Schema(description = "Информация о доске компьютера")
     private GameBoardDto computerBoard;
+
+    public void setPlayerBoard(GameBoardDto playerBoard) {
+        this.playerBoard = playerBoard;
+    }
+    public void setComputerBoard(GameBoardDto computerBoard) {
+        this.computerBoard = computerBoard;
+    }
+    public void setPlayerTurn(boolean playerTurn) {
+        this.playerTurn = playerTurn;
+    }
+    public void setGameState(GameState gameState) {
+        this.gameState = gameState;
+    }
+    public void setMode(GameMode mode) {
+        this.mode = mode;
+    }
 }
 
