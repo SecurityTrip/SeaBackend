@@ -18,4 +18,10 @@ public class LoginResponse {
     
     @Schema(description = "Идентификатор пользователя", example = "1", required = true)
     private Long userId;
+
+    @Schema(description = "Идентификатор аватара пользователя", example = "1", required = true)
+    private int avatarId;
+
+    @Schema(description = "Refresh токен для обновления доступа", example = "eyJhbGciOiJIUzI1NiJ9...", required = true)
+    private String refreshToken;
 }

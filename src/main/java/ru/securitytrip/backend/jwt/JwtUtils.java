@@ -24,6 +24,9 @@ public class JwtUtils {
     @Value("${jwt.expiration:86400000}")
     private int jwtExpirationMs;
 
+    @Value("${jwt.refreshExpiration:604800000}") // 7 дней по умолчанию
+    private int jwtRefreshExpirationMs;
+
     public String generateJwtToken(Authentication authentication) {
         UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
         logger.debug("Генерация JWT токена для пользователя: {}", userPrincipal.getUsername());
@@ -70,7 +73,49 @@ public class JwtUtils {
         return false;
     }
     
+    public String generateRefreshToken(Authentication authentication) {
+        UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
+        logger.debug("Генерация refresh токена для пользователя: {}", userPrincipal.getUsername());
+
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + jwtRefreshExpirationMs);
+        logger.debug("Refresh токен действителен до: {}", expiry);
+
+        return Jwts.builder()
+                .setSubject(userPrincipal.getUsername())
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(key(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String generateRefreshToken(String username) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + jwtRefreshExpirationMs);
+        return Jwts.builder()
+                .setSubject(username)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(key(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public boolean validateRefreshToken(String refreshToken) {
+        return validateJwtToken(refreshToken);
+    }
+    
     private Key key() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
-} 
+
+    public String generateJwtTokenFromUsername(String username) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + jwtExpirationMs);
+        return Jwts.builder()
+                .setSubject(username)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(key(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+}

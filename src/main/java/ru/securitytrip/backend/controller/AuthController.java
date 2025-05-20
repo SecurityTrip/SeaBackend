@@ -73,4 +73,18 @@ public class AuthController {
         
         return ResponseEntity.ok(response);
     }
+
+    @Operation(summary = "Обновление access-токена по refresh-токену", description = "Позволяет получить новый access-токен и refresh-токен по действующему refresh-токену.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Токен успешно обновлён",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = LoginResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Refresh токен невалиден или истёк",
+                    content = @Content)
+    })
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponse> refreshToken(@RequestBody String refreshToken) {
+        LoginResponse response = authService.refreshAccessToken(refreshToken);
+        return ResponseEntity.ok(response);
+    }
 }

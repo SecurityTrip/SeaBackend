@@ -36,41 +36,45 @@ public class AuthService {
 
     public LoginResponse authenticateUser(LoginRequest loginRequest) {
         logger.debug("Попытка аутентификации пользователя: {}", loginRequest.getUsername());
-        
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         loginRequest.getUsername(),
                         loginRequest.getPassword()
                 )
         );
-
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String jwt = jwtUtils.generateJwtToken(authentication);
+        String refreshToken = jwtUtils.generateRefreshToken(authentication);
         logger.debug("JWT токен успешно сгенерирован");
-
         User user = userRepository.findByUsername(loginRequest.getUsername()).orElseThrow();
         logger.debug("Пользователь найден в базе данных, userId: {}", user.getId());
-        
-        return new LoginResponse(jwt, user.getUsername(), user.getId());
+        return new LoginResponse(jwt, user.getUsername(), user.getId(), user.getAvatarId(), refreshToken);
     }
 
     public RegisterResponse registerUser(RegisterRequest registerRequest) {
         logger.debug("Попытка регистрации пользователя: {}", registerRequest.getUsername());
-        
         if (userRepository.existsByUsername(registerRequest.getUsername())) {
             logger.warn("Пользователь с именем {} уже существует", registerRequest.getUsername());
             return new RegisterResponse("Пользователь с таким именем уже существует", false);
         }
-
         User user = new User();
         user.setUsername(registerRequest.getUsername());
         user.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
         user.setAvatarId(registerRequest.getAvatarId());
-        
         logger.debug("Сохранение нового пользователя в базу данных");
         userRepository.save(user);
         logger.info("Пользователь {} успешно зарегистрирован", registerRequest.getUsername());
-
         return new RegisterResponse("Пользователь успешно зарегистрирован", true);
     }
-} 
+
+    public LoginResponse refreshAccessToken(String refreshToken) {
+        if (!jwtUtils.validateJwtToken(refreshToken)) {
+            throw new RuntimeException("Refresh токен невалиден или истёк");
+        }
+        String username = jwtUtils.getUserNameFromJwtToken(refreshToken);
+        User user = userRepository.findByUsername(username).orElseThrow();
+        String newAccessToken = jwtUtils.generateJwtTokenFromUsername(username);
+        String newRefreshToken = jwtUtils.generateRefreshToken(username);
+        return new LoginResponse(newAccessToken, user.getUsername(), user.getId(), user.getAvatarId(), newRefreshToken);
+    }
+}
