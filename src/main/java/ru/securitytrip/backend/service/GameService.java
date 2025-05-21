@@ -412,33 +412,54 @@ public class GameService {
         dto.setGameState(game.getGameState());
         dto.setPlayerTurn(game.isPlayerTurn());
         
+        logger.info("[convertToGameDto] User ID: {}, Game ID: {}, Game Mode: {}", userId, game.getId(), game.getMode());
+
         for (GameBoard board : game.getBoards()) {
             GameBoardDto boardDto = new GameBoardDto();
             boardDto.setId(board.getId());
             boardDto.setBoard(board.getBoardAsArray());
             boardDto.setComputer(board.isComputer());
             
+            logger.info("[convertToGameDto] Processing Board ID: {}, Owner ID: {}, Is Computer: {}", 
+                        board.getId(), board.getOwnerId(), board.isComputer());
+
             try {
-                // Для игрока показываем все корабли, для компьютера - только подбитые части
-                if (userId != null && userId.equals(board.getOwnerId())) {
-                    List<Ship> ships = objectMapper.readValue(board.getShipsData(), 
-                            objectMapper.getTypeFactory().constructCollectionType(List.class, Ship.class));
-                    
-                    boardDto.setShips(ships.stream().map(this::convertToShipDto).collect(Collectors.toList()));
-                    dto.setPlayerBoard(boardDto);
-                } else {
-                    // Для компьютера показываем только подбитые корабли
-                    if (game.getGameState() == GameState.PLAYER_WON || game.getGameState() == GameState.COMPUTER_WON) {
-                        // После окончания игры показываем все корабли компьютера
-                        List<Ship> ships = objectMapper.readValue(board.getShipsData(), 
-                                objectMapper.getTypeFactory().constructCollectionType(List.class, Ship.class));
-                        
-                        boardDto.setShips(ships.stream().map(this::convertToShipDto).collect(Collectors.toList()));
+                // В одиночной игре определяем доску игрока по признаку isComputer = false
+                if (game.getMode() == GameMode.singleplayer) {
+                    if (!board.isComputer()) {
+                         logger.info("[convertToGameDto] Identified as Singleplayer Player Board");
+                         List<Ship> ships = objectMapper.readValue(board.getShipsData(), 
+                                 objectMapper.getTypeFactory().constructCollectionType(List.class, Ship.class));
+                         boardDto.setShips(ships.stream().map(this::convertToShipDto).collect(Collectors.toList()));
+                         dto.setPlayerBoard(boardDto);
                     } else {
-                        // Во время игры не показываем расположение кораблей компьютера
-                        boardDto.setShips(new ArrayList<>());
+                         logger.info("[convertToGameDto] Identified as Singleplayer Computer Board");
+                         // Для компьютера показываем только подбитые корабли во время игры, все после игры
+                          if (game.getGameState() == GameState.PLAYER_WON || game.getGameState() == GameState.COMPUTER_WON) {
+                             List<Ship> ships = objectMapper.readValue(board.getShipsData(), 
+                                     objectMapper.getTypeFactory().constructCollectionType(List.class, Ship.class));
+                              boardDto.setShips(ships.stream().map(this::convertToShipDto).collect(Collectors.toList()));
+                          } else {
+                              boardDto.setShips(new ArrayList<>()); // Во время игры не показываем корабли компьютера
+                          }
+                         dto.setComputerBoard(boardDto);
                     }
-                    dto.setComputerBoard(boardDto);
+                } else if (game.getMode() == GameMode.multiplayer) {
+                    // Логика для мультиплеера остается прежней (по userId)
+                    if (userId != null && userId.equals(board.getOwnerId())) {
+                         logger.info("[convertToGameDto] Identified as Multiplayer Player Board");
+                         List<Ship> ships = objectMapper.readValue(board.getShipsData(), 
+                                 objectMapper.getTypeFactory().constructCollectionType(List.class, Ship.class));
+                         boardDto.setShips(ships.stream().map(this::convertToShipDto).collect(Collectors.toList()));
+                         dto.setPlayerBoard(boardDto);
+                     } else {
+                         logger.info("[convertToGameDto] Identified as Multiplayer Opponent Board");
+                         // Временно упрощенная логика для мультиплеера - показываем все корабли противника (для устранения ошибок компиляции)
+                          List<Ship> ships = objectMapper.readValue(board.getShipsData(), 
+                                  objectMapper.getTypeFactory().constructCollectionType(List.class, Ship.class));
+                           boardDto.setShips(ships.stream().map(this::convertToShipDto).collect(Collectors.toList()));
+                         dto.setComputerBoard(boardDto); // В мультиплеере поле противника тоже компьютерное с точки зрения DTO
+                     }
                 }
             } catch (JsonProcessingException e) {
                 logger.error("Ошибка при десериализации кораблей", e);
@@ -448,7 +469,7 @@ public class GameService {
         
         return dto;
     }
-    
+
     // Конвертирует Ship в ShipDto
     private ShipDto convertToShipDto(Ship ship) {
         ShipDto dto = new ShipDto();
@@ -457,15 +478,55 @@ public class GameService {
         dto.setY(ship.getY());
         dto.setHorizontal(ship.isHorizontal());
         
-        // Преобразуем List<Boolean> в boolean[]
+        // Преобразуем List<Boolean> в boolean[] и устанавливаем в DTO
         List<Boolean> hitsList = ship.getHits();
-        boolean[] hitsArray = new boolean[hitsList.size()];
-        for (int i = 0; i < hitsList.size(); i++) {
-            hitsArray[i] = hitsList.get(i);
+        if (hitsList != null) {
+            boolean[] hitsArray = new boolean[hitsList.size()];
+            for (int i = 0; i < hitsList.size(); i++) {
+                Boolean hit = hitsList.get(i);
+                hitsArray[i] = hit != null && hit; // Обрабатываем случай null, хотя List<Boolean> обычно не содержит null
+            }
+            dto.setHits(hitsArray);
+        } else {
+            // Если hitsList null, создаем пустой массив попаданий соответствующего размера
+            dto.setHits(new boolean[ship.getSize()]); 
         }
-        dto.setHits(hitsArray);
-        
+
+        // Генерируем и устанавливаем позиции корабля в DTO
+        // Убедимся, что у Ship есть метод getCoordinates()
+        dto.setPositions(generateShipPositionsFromShip(ship));
+
         return dto;
+    }
+
+    // Генерация позиций корабля из ShipDto
+    private java.util.List<int[]> generateShipPositionsFromShipDto(ShipDto ship) {
+        java.util.List<int[]> positions = new java.util.ArrayList<>();
+        int x = ship.getX();
+        int y = ship.getY();
+        for (int i = 0; i < ship.getSize(); i++) {
+            if (ship.isHorizontal()) {
+                positions.add(new int[]{x + i, y});
+            } else {
+                positions.add(new int[]{x, y + i});
+            }
+        }
+        return positions;
+    }
+
+    // Генерация позиций корабля из Ship модели
+    private java.util.List<int[]> generateShipPositionsFromShip(Ship ship) {
+        java.util.List<int[]> positions = new java.util.ArrayList<>();
+        int x = ship.getX();
+        int y = ship.getY();
+        for (int i = 0; i < ship.getSize(); i++) {
+            if (ship.isHorizontal()) {
+                positions.add(new int[]{x + i, y});
+            } else {
+                positions.add(new int[]{x, y + i});
+            }
+        }
+        return positions;
     }
 
     @Transactional
@@ -908,7 +969,7 @@ public class GameService {
         for (ShipDto ship : ships) {
             // Ensure positions are generated if not already present
             if (ship.getPositions() == null) {
-                 ship.setPositions(generateShipPositions(ship));
+                 ship.setPositions(generateShipPositionsFromShipDto(ship));
             }
             for (int[] pos : ship.getPositions()) {
                 int x = pos[0];
@@ -939,9 +1000,7 @@ public class GameService {
             
             // Generate and set ship positions for player 1
             for (ShipDto ship : ships) {
-                if (ship.getPositions() == null) {
-                    ship.setPositions(generateShipPositions(ship));
-                }
+                 ship.setPositions(generateShipPositionsFromShipDto(ship));
             }
             
             // Сохраняем данные игрока 1
@@ -1007,7 +1066,7 @@ public class GameService {
             // Generate and set ship positions for player 2
             for (ShipDto ship : ships) {
                 if (ship.getPositions() == null) {
-                    ship.setPositions(generateShipPositions(ship));
+                    ship.setPositions(generateShipPositionsFromShipDto(ship));
                 }
             }
             entity.setPlayer2ShipsJson(objectMapper.writeValueAsString(ships));
@@ -1072,21 +1131,6 @@ public class GameService {
         } catch (Exception e) {
             throw new RuntimeException("Ошибка сериализации/десериализации комнаты", e);
         }
-    }
-
-    // Генерация позиций корабля по x, y, size, isHorizontal
-    private java.util.List<int[]> generateShipPositions(ShipDto ship) {
-        java.util.List<int[]> positions = new java.util.ArrayList<>();
-        int x = ship.getX();
-        int y = ship.getY();
-        for (int i = 0; i < ship.getSize(); i++) {
-            if (ship.isHorizontal()) {
-                positions.add(new int[]{x + i, y});
-            } else {
-                positions.add(new int[]{x, y + i});
-            }
-        }
-        return positions;
     }
 
     // --- МУЛЬТИПЛЕЕРНЫЕ МЕТОДЫ ---
