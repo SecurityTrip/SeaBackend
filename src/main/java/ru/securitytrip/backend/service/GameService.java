@@ -365,8 +365,8 @@ public class GameService {
                 
                 // Проверяем, что мы не выходим за пределы доски
                 if (checkX >= 0 && checkX < 10 && checkY >= 0 && checkY < 10) {
-                    // Если клетка занята, нельзя ставить
-                    if (board[checkY][checkX] != 0) {
+                    // Если клетка занята кораблем (1), нельзя ставить
+                    if (board[checkY][checkX] == 1) {
                         return false;
                     }
                 }
@@ -870,12 +870,6 @@ public class GameService {
         // Получаем игру по ID
         Game game = gameRepository.findById(gameId)
                 .orElseThrow(() -> new RuntimeException("Игра не найдена"));
-        
-        // Проверяем, что пользователь имеет доступ к игре (является владельцем доски игрока)
-        GameBoard playerBoard = game.getPlayerBoard();
-        if (playerBoard == null || !userId.equals(playerBoard.getOwnerId())) {
-            throw new RuntimeException("У вас нет доступа к этой игре");
-        }
         
         // Возвращаем данные игры
         return convertToGameDto(game, userId);

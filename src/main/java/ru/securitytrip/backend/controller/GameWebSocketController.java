@@ -4,14 +4,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.SendTo;
-import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.RestController;
 import ru.securitytrip.backend.dto.CreateSinglePlayerGameRequest;
 import ru.securitytrip.backend.dto.GameDto;
 import ru.securitytrip.backend.dto.MoveRequest;
 import ru.securitytrip.backend.dto.MoveResponse;
+import ru.securitytrip.backend.model.User;
 import ru.securitytrip.backend.service.GameService;
+import ru.securitytrip.backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,13 +21,18 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import java.security.Principal;
+
 @Tag(name = "WebSocket Морской Бой (Singleplayer)", description = "Production-ready WebSocket API для одиночной игры в морской бой.\n\nКаналы:\n- /app/singleplayer.create (создать игру)\n- /app/singleplayer.move (сделать ход)\n- /app/singleplayer.state (получить состояние)\n\nВсе методы работают только для singleplayer режима. Примеры сообщений доступны в описаниях методов.")
-@RestController
+@Controller
 @CrossOrigin(origins = "http://localhost")
 public class GameWebSocketController {
 
     @Autowired
     private GameService gameService;
+
+    @Autowired
+    private UserService userService;
 
     @Operation(summary = "Создать одиночную игру", description = "Создаёт новую singleplayer игру с расстановкой кораблей игрока.\n\n**Отправить:** CreateSinglePlayerGameRequest на /app/singleplayer.create\n**Получить:** GameDto по /topic/singleplayer/game.\n\nПример запроса:\n```json\n{\n  \"ships\": [\n    {\"size\": 4, \"x\": 0, \"y\": 0, \"horizontal\": true}\n  ],\n  \"difficultyLevel\": \"EASY\"\n}\n```\n\nПример ответа GameDto см. в /topic/singleplayer/state.")
     @ApiResponses(value = {
@@ -39,9 +45,12 @@ public class GameWebSocketController {
     public GameDto createSinglePlayerGame(
             @Parameter(description = "Данные расстановки кораблей игрока", required = true)
             @Payload CreateSinglePlayerGameRequest request,
-            SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
-        Long userId = getUserIdOrGenerateFromUsername(username);
+            Principal principal) {
+        User user = userService.findByUsername(principal.getName());
+        if (user == null) {
+            throw new RuntimeException("Пользователь не найден");
+        }
+        Long userId = user.getId();
         return gameService.createSinglePlayerGame(userId, request);
     }
 
@@ -54,9 +63,12 @@ public class GameWebSocketController {
     public MoveResponse makeMove(
             @Parameter(description = "Данные хода: ID игры и координаты выстрела", required = true)
             @Payload MoveRequest moveRequest,
-            SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
-        Long userId = getUserIdOrGenerateFromUsername(username);
+            Principal principal) {
+        User user = userService.findByUsername(principal.getName());
+        if (user == null) {
+            throw new RuntimeException("Пользователь не найден");
+        }
+        Long userId = user.getId();
         return gameService.playerMove(userId, moveRequest);
     }
 
@@ -69,17 +81,12 @@ public class GameWebSocketController {
     public GameDto getGameState(
             @Parameter(description = "ID игры", required = true)
             @Payload Long gameId,
-            SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
-        Long userId = getUserIdOrGenerateFromUsername(username);
-        return gameService.getGameById(gameId, userId);
-    }
-
-    private Long getUserIdOrGenerateFromUsername(String username) {
-        try {
-            return Long.parseLong(username);
-        } catch (NumberFormatException e) {
-            return Math.abs((long) username.hashCode());
+            Principal principal) {
+        User user = userService.findByUsername(principal.getName());
+        if (user == null) {
+            throw new RuntimeException("Пользователь не найден");
         }
+        Long userId = user.getId();
+        return gameService.getGameById(gameId, userId);
     }
 }

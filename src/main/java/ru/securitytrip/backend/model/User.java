@@ -20,6 +20,10 @@ public class User {
     @Schema(description = "Уникальный идентификатор пользователя", example = "1")
     private Long id;
 
+    public Long getId() {
+        return id;
+    }
+
     @Schema(description = "Имя пользователя", example = "user123")
     private String username;
     
