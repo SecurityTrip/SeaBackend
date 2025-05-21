@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 import ru.securitytrip.backend.dto.*;
 import ru.securitytrip.backend.service.GameService;
+import ru.securitytrip.backend.model.GameMode;
 
 @Tag(name = "WebSocket Морской Бой (Multiplayer)", description = "Production-ready WebSocket API для мультиплеерной игры в морской бой.\n\nКаналы:\n- /app/multiplayer.create (создать комнату)\n- /app/multiplayer.join (подключиться по коду)\n- /app/multiplayer.move (сделать ход)\n- /app/multiplayer.state (получить состояние)\n\nВсе методы работают только для multiplayer режима. Примеры сообщений и ответы приведены в описаниях методов.")
 @RestController
@@ -79,6 +80,9 @@ public class MultiplayerGameWebSocketController {
     @MessageMapping("/multiplayer.state")
     @SendTo("/topic/multiplayer/state")
     public GameDto getGameState(@Payload String gameCode) {
-        return gameService.getMultiplayerGameState(gameCode);
+        GameDto gameState = gameService.getMultiplayerGameState(gameCode);
+        // Убедимся, что режим игры установлен как multiplayer
+        gameState.setMode(GameMode.multiplayer);
+        return gameState;
     }
 }
