@@ -14,7 +14,7 @@ import ru.securitytrip.backend.service.UserService;
 
 @RestController
 @RequestMapping("/user")
-@Tag(name = "Пользователь", description = "API для управления профилем пользователя")
+@Tag(name = "Пользователь", description = "Профиль пользователя и его обновление")
 public class UserController {
     @Autowired
     private UserService userService;

@@ -48,6 +48,7 @@ import java.util.ArrayList;
  * Пример работы с WebSocket описан в GameWebSocketController.
  */
 
+@Tag(name = "Морской Бой REST", description = "REST API для одиночной и мультиплеерной игры в морской бой")
 @RestController
 @RequestMapping("/game")
 @CrossOrigin(origins = "http://localhost")

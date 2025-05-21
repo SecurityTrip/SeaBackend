@@ -12,4 +12,6 @@ import lombok.NoArgsConstructor;
 public class CreateMultiplayerGameRequest {
     @Schema(description = "Расстановка кораблей игрока")
     private java.util.List<ShipDto> ships;
+
+    public java.util.List<ShipDto> getShips() { return ships; }
 }

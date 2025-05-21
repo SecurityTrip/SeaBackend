@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "WebSocket Морской Бой", description = "WebSocket API для одиночной игры в морской бой")
+@Tag(name = "WebSocket Морской Бой (Singleplayer)", description = "WebSocket API для одиночной игры в морской бой. Все методы работают только для singleplayer режима.\n\nКаналы:\n- /app/singleplayer.create (создать игру)\n- /app/singleplayer.move (сделать ход)\n- /app/singleplayer.state (получить состояние)")
 @Controller
 public class GameWebSocketController {
 

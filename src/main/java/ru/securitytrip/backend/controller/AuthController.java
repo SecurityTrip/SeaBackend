@@ -22,7 +22,7 @@ import ru.securitytrip.backend.service.AuthService;
 
 @RestController
 @RequestMapping("/auth")
-@Tag(name = "Аутентификация", description = "API для аутентификации и регистрации пользователей")
+@Tag(name = "Аутентификация", description = "Регистрация, логин, refresh токен")
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);

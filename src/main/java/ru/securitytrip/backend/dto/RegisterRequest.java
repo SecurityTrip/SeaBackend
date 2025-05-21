@@ -18,4 +18,11 @@ public class RegisterRequest {
     
     @Schema(description = "Идентификатор аватара", example = "1", required = true)
     private int avatarId;
+
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public int getAvatarId() { return avatarId; }
+    public void setAvatarId(int avatarId) { this.avatarId = avatarId; }
 }
