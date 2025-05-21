@@ -961,4 +961,101 @@ public class GameService {
         }
         return positions;
     }
-}
+
+    // --- МУЛЬТИПЛЕЕРНЫЕ МЕТОДЫ ---
+    /**
+     * Выполнить ход в мультиплеерной игре
+     * @param gameCode код комнаты
+     * @param userId id пользователя
+     * @param moveRequest координаты хода
+     * @return актуальное состояние игры (GameDto)
+     */
+    public GameDto makeMultiplayerMove(String gameCode, Long userId, MoveRequest moveRequest) {
+        MultiplayerRoom room = multiplayerRooms.get(gameCode);
+        if (room == null) throw new RuntimeException("Комната не найдена");
+        if (room.player1Id == null || room.player2Id == null) throw new RuntimeException("Ожидание второго игрока");
+
+        // Определяем, чей ход
+        boolean isPlayer1 = userId.equals(room.player1Id);
+        boolean isPlayer2 = userId.equals(room.player2Id);
+        if (!isPlayer1 && !isPlayer2) throw new RuntimeException("Вы не участник этой игры");
+        String expectedTurn = room.currentTurn;
+        if ((isPlayer1 && !"player1".equals(expectedTurn)) || (isPlayer2 && !"player2".equals(expectedTurn))) {
+            throw new RuntimeException("Сейчас не ваш ход");
+        }
+
+        int x = moveRequest.getX();
+        int y = moveRequest.getY();
+        int[][] enemyBoard = isPlayer1 ? room.player2Board : room.player1Board;
+        List<ShipDto> enemyShips = isPlayer1 ? room.player2Ships : room.player1Ships;
+
+        // Проверка координат
+        if (x < 0 || x >= 10 || y < 0 || y >= 10) throw new RuntimeException("Недопустимые координаты");
+        if (enemyBoard[y][x] == 2 || enemyBoard[y][x] == 3) throw new RuntimeException("По этой клетке уже стреляли");
+
+        // Проверяем попадание
+        boolean hit = false;
+        boolean sunk = false;
+        for (ShipDto ship : enemyShips) {
+            List<int[]> positions = ship.getPositions();
+            boolean[] hits = ship.getHits() != null ? ship.getHits() : new boolean[ship.getSize()];
+            for (int i = 0; i < positions.size(); i++) {
+                int[] pos = positions.get(i);
+                if (pos[0] == x && pos[1] == y) {
+                    if (!hits[i]) {
+                        hits[i] = true;
+                        hit = true;
+                        // Проверяем, потоплен ли корабль
+                        boolean allHit = true;
+                        for (boolean h : hits) if (!h) allHit = false;
+                        if (allHit) sunk = true;
+                        ship.setHits(hits);
+                    }
+                }
+            }
+        }
+        enemyBoard[y][x] = hit ? 3 : 2;
+
+        // Проверяем победу
+        boolean allShipsSunk = true;
+        for (ShipDto ship : enemyShips) {
+            boolean[] hits = ship.getHits() != null ? ship.getHits() : new boolean[ship.getSize()];
+            for (boolean h : hits) if (!h) allShipsSunk = false;
+        }
+        if (allShipsSunk) {
+            room.gameState.setGameState(isPlayer1 ? GameState.PLAYER_WON : GameState.COMPUTER_WON);
+        }
+
+        // Переключаем ход, если промах или игра не окончена
+        if (!hit && !allShipsSunk) {
+            room.currentTurn = isPlayer1 ? "player2" : "player1";
+        }
+        // Обновляем состояние
+        room.gameState.setMode(GameMode.multiplayer);
+        room.gameState.setPlayerTurn(room.currentTurn.equals("player1"));
+        room.gameState.setGameState(room.gameState.getGameState() == null ? GameState.IN_PROGRESS : room.gameState.getGameState());
+        // Обновляем доски
+        GameBoardDto board1 = new GameBoardDto();
+        board1.setBoard(room.player1Board);
+        board1.setShips(room.player1Ships);
+        board1.setComputer(false);
+        GameBoardDto board2 = new GameBoardDto();
+        board2.setBoard(room.player2Board);
+        board2.setShips(room.player2Ships);
+        board2.setComputer(false);
+        room.gameState.setPlayerBoard(isPlayer1 ? board1 : board2);
+        room.gameState.setComputerBoard(isPlayer1 ? board2 : board1);
+        return room.gameState;
+    }
+
+    /**
+     * Получить состояние мультиплеерной игры по коду
+     * @param gameCode код комнаты
+     * @return GameDto
+     */
+    public GameDto getMultiplayerGameState(String gameCode) {
+        MultiplayerRoom room = multiplayerRooms.get(gameCode);
+        if (room == null) throw new RuntimeException("Комната не найдена");
+        return room.gameState;
+    }
+} // конец класса GameService

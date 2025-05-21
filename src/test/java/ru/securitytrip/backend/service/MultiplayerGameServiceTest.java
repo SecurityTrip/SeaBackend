@@ -36,14 +36,14 @@ class MultiplayerGameServiceTest {
         // Игрок 1 делает ход по первой клетке корабля игрока 2
         ShipDto targetShip = ships2.get(0);
         int[] pos = targetShip.getPositions().get(0);
-        MoveRequest move = new MoveRequest(null, pos[0], pos[1]);
+        MoveRequest move = new MoveRequest(null, pos[0], pos[1], code);
         state = gameService.makeMultiplayerMove(code, player1Id, move);
         assertTrue(state.isPlayerTurn() == false || state.getGameState() != null);
 
         // Игрок 2 делает ответный ход
         ShipDto targetShip2 = ships1.get(0);
         int[] pos2 = targetShip2.getPositions().get(0);
-        MoveRequest move2 = new MoveRequest(null, pos2[0], pos2[1]);
+        MoveRequest move2 = new MoveRequest(null, pos2[0], pos2[1], code);
         state = gameService.makeMultiplayerMove(code, player2Id, move2);
         assertTrue(state.isPlayerTurn() == true || state.getGameState() != null);
     }

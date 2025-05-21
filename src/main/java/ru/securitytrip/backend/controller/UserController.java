@@ -14,6 +14,7 @@ import ru.securitytrip.backend.service.UserService;
 
 @RestController
 @RequestMapping("/user")
+@CrossOrigin(origins = "http://localhost")
 @Tag(name = "Пользователь", description = "Профиль пользователя и его обновление")
 public class UserController {
     @Autowired

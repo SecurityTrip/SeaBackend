@@ -42,7 +42,9 @@ public class SecurityConfig {
             "/swagger-ui.html",
             "/swagger-resources/**",
             "/webjars/**",
-            "/actuator/**"
+            "/actuator/**",
+            "/ws/**",
+            "/ws"
     };
 
     @Bean
@@ -52,7 +54,8 @@ public class SecurityConfig {
             .cors(c -> c.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> 
-                auth.requestMatchers(PUBLIC_URLS).permitAll()
+                auth.
+                        requestMatchers(PUBLIC_URLS).permitAll()
                     .anyRequest().authenticated()
             );
         

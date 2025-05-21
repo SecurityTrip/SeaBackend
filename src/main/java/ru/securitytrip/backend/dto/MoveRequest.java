@@ -21,4 +21,8 @@ public class MoveRequest {
             example = "3", minimum = "0", maximum = "9", required = true)
     private int y;
 
+    @Schema(description = "Код комнаты (gameCode) для мультиплеерной игры", example = "ABC123", required = false)
+    private String gameCode;
+    public String getGameCode() { return gameCode; }
+    public void setGameCode(String gameCode) { this.gameCode = gameCode; }
 }
