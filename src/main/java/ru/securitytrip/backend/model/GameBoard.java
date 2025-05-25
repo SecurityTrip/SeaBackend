@@ -14,7 +14,7 @@ import lombok.Setter;
 public class GameBoard {
 
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private Long ownerId;

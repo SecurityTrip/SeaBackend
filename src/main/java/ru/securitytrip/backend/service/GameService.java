@@ -1008,9 +1008,9 @@ public class GameService {
             int[][] player1Board = generateBoardWithShips(ships);
             entity.setPlayer1BoardJson(objectMapper.writeValueAsString(player1Board));
             
-            // Сохраняем пустые данные для игрока 2
-            entity.setPlayer2ShipsJson(objectMapper.writeValueAsString(emptyShips));
-            entity.setPlayer2BoardJson(objectMapper.writeValueAsString(emptyBoard));
+            // --- НЕ сохраняем пустые данные для игрока 2 ---
+            // entity.setPlayer2ShipsJson(objectMapper.writeValueAsString(emptyShips));
+            // entity.setPlayer2BoardJson(objectMapper.writeValueAsString(emptyBoard));
             
             // Инициализация GameDto с начальным состоянием (ожидание игрока 2)
             GameDto gameState = new GameDto();
@@ -1059,6 +1059,9 @@ public class GameService {
         
         if (entity.getPlayer2Id() != null) {
             throw new RuntimeException("Комната уже заполнена");
+        }
+        if (userId.equals(entity.getPlayer1Id())) {
+            throw new RuntimeException("Хост не может быть гостем в своей комнате");
         }
         
         entity.setPlayer2Id(userId);
@@ -1126,6 +1129,7 @@ public class GameService {
             multiplayerRoomRepository.save(entity);
 
             // Возвращаем состояние для игрока 2
+            player2GameState.setGameCode(gameCode); // <--- добавлено
             return player2GameState;
 
         } catch (Exception e) {

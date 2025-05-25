@@ -34,6 +34,9 @@ public class GameDto {
     @Schema(description = "Информация о доске компьютера")
     private GameBoardDto computerBoard;
 
+    @Schema(description = "Код комнаты для мультиплеерной игры", example = "ABC123")
+    private String gameCode;
+
     public void setPlayerBoard(GameBoardDto playerBoard) {
         this.playerBoard = playerBoard;
     }
@@ -48,6 +51,12 @@ public class GameDto {
     }
     public void setMode(GameMode mode) {
         this.mode = mode;
+    }
+    public void setGameCode(String gameCode) {
+        this.gameCode = gameCode;
+    }
+    public String getGameCode() {
+        return this.gameCode;
     }
 }
 

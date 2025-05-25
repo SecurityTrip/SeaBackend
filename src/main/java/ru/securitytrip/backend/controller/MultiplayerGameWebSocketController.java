@@ -15,10 +15,15 @@ import ru.securitytrip.backend.dto.*;
 import ru.securitytrip.backend.service.GameService;
 import ru.securitytrip.backend.model.GameMode;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Tag(name = "WebSocket Морской Бой (Multiplayer)", description = "Production-ready WebSocket API для мультиплеерной игры в морской бой.\n\nКаналы:\n- /app/multiplayer.create (создать комнату)\n- /app/multiplayer.join (подключиться по коду)\n- /app/multiplayer.move (сделать ход)\n- /app/multiplayer.state (получить состояние)\n\nВсе методы работают только для multiplayer режима. Примеры сообщений и ответы приведены в описаниях методов.")
 @RestController
 @CrossOrigin(origins = "http://localhost")
 public class MultiplayerGameWebSocketController {
+
+    private static final Logger logger = LoggerFactory.getLogger(MultiplayerGameWebSocketController.class);
 
     @Autowired
     private GameService gameService;
@@ -35,7 +40,9 @@ public class MultiplayerGameWebSocketController {
     public MultiplayerGameCodeResponse createMultiplayerGame(@Payload CreateMultiplayerGameRequest request, SimpMessageHeaderAccessor headerAccessor) {
         String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
         Long userId = Math.abs((long) username.hashCode());
+        logger.info("[MULTIPLAYER] Запрос на создание комнаты от пользователя: {} (userId={}), ships={}", username, userId, request.getShips());
         String gameCode = gameService.createMultiplayerGame(userId, request.getShips());
+        logger.info("[MULTIPLAYER] Комната создана: {} для userId={}", gameCode, userId);
         return new MultiplayerGameCodeResponse(gameCode);
     }
 
@@ -52,7 +59,10 @@ public class MultiplayerGameWebSocketController {
     public GameDto joinMultiplayerGame(@Payload JoinMultiplayerGameRequest request, SimpMessageHeaderAccessor headerAccessor) {
         String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
         Long userId = Math.abs((long) username.hashCode());
-        return gameService.joinMultiplayerGame(request.getGameCode(), userId, request.getShips());
+        logger.info("[MULTIPLAYER] Пользователь {} (userId={}) подключается к комнате {} с кораблями {}", username, userId, request.getGameCode(), request.getShips());
+        GameDto dto = gameService.joinMultiplayerGame(request.getGameCode(), userId, request.getShips());
+        logger.info("[MULTIPLAYER] Пользователь {} (userId={}) успешно подключён к комнате {}", username, userId, request.getGameCode());
+        return dto;
     }
 
     // Сделать ход в мультиплеерной игре
@@ -68,7 +78,10 @@ public class MultiplayerGameWebSocketController {
         String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
         Long userId = Math.abs((long) username.hashCode());
         String gameCode = moveRequest.getGameCode();
-        return gameService.makeMultiplayerMove(gameCode, userId, moveRequest);
+        logger.info("[MULTIPLAYER] Пользователь {} (userId={}) делает ход в комнате {}: x={}, y={}", username, userId, gameCode, moveRequest.getX(), moveRequest.getY());
+        GameDto dto = gameService.makeMultiplayerMove(gameCode, userId, moveRequest);
+        logger.info("[MULTIPLAYER] Ход пользователя {} (userId={}) в комнате {} обработан", username, userId, gameCode);
+        return dto;
     }
 
     // Получить состояние мультиплеерной игры
@@ -80,9 +93,11 @@ public class MultiplayerGameWebSocketController {
     @MessageMapping("/multiplayer.state")
     @SendTo("/topic/multiplayer/state")
     public GameDto getGameState(@Payload String gameCode) {
+        logger.info("[MULTIPLAYER] Запрос состояния комнаты {}", gameCode);
         GameDto gameState = gameService.getMultiplayerGameState(gameCode);
         // Убедимся, что режим игры установлен как multiplayer
         gameState.setMode(GameMode.multiplayer);
+        logger.info("[MULTIPLAYER] Состояние комнаты {} отправлено", gameCode);
         return gameState;
     }
 }
