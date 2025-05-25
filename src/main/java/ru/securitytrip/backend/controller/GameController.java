@@ -23,6 +23,8 @@ import ru.securitytrip.backend.service.GameService;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -54,6 +56,8 @@ import java.util.ArrayList;
 @CrossOrigin(origins = "http://localhost")
 @Tag(name = "Морской Бой", description = "API для управления игрой в морской бой")
 public class GameController {
+
+    private static final Logger logger = LoggerFactory.getLogger(GameController.class);
 
     @Autowired
     private GameService gameService;
@@ -348,9 +352,12 @@ public class GameController {
             GameDto gameDto = gameService.getMultiplayerGameState(gameCode, userId);
             return ResponseEntity.ok(gameDto);
         } catch (RuntimeException e) {
-            if (e.getMessage() != null && e.getMessage().contains("не найдена")) {
+            String reason = e.getMessage();
+            if (reason != null && reason.contains("не найдена")) {
+                logger.warn("[getMultiplayerGameState] userId={}, gameCode={}, причина=Игра не найдена: {}", userId, gameCode, reason);
                 return ResponseEntity.status(404).build();
             }
+            logger.warn("[getMultiplayerGameState] userId={}, gameCode={}, причина=Доступ запрещен: {}", userId, gameCode, reason, e);
             return ResponseEntity.status(403).build();
         }
     }
