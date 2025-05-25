@@ -1060,6 +1060,9 @@ public class GameService {
         if (entity.getPlayer2Id() != null) {
             throw new RuntimeException("Комната уже заполнена");
         }
+        if (userId.equals(entity.getPlayer1Id())) {
+            throw new RuntimeException("Хост не может быть гостем в своей комнате");
+        }
         
         entity.setPlayer2Id(userId);
         try {

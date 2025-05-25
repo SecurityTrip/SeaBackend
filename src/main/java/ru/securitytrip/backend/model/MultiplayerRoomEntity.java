@@ -10,6 +10,7 @@ import lombok.Setter;
 @Table(name = "multiplayer_rooms")
 public class MultiplayerRoomEntity {
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private String code;
 
     private Long player1Id;
