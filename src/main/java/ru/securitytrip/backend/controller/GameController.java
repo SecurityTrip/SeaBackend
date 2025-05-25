@@ -323,4 +323,33 @@ public class GameController {
             return Math.abs((long) username.hashCode());
         }
     }
+    
+    @Operation(summary = "Получить состояние мультиплеерной игры",
+               description = "Возвращает текущее состояние мультиплеерной игры по коду комнаты (gameCode)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Данные игры успешно получены",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = GameDto.class))),
+            @ApiResponse(responseCode = "401", description = "Не авторизован",
+                    content = @Content),
+            @ApiResponse(responseCode = "403", description = "Доступ запрещен (не участник игры)",
+                    content = @Content),
+            @ApiResponse(responseCode = "404", description = "Игра не найдена",
+                    content = @Content)
+    })
+    @GetMapping("/multiplayer/{gameCode}")
+    public ResponseEntity<GameDto> getMultiplayerGameState(
+            @Parameter(description = "Код комнаты (gameCode)", required = true)
+            @PathVariable String gameCode) {
+        // Можно добавить проверку, что пользователь действительно участник этой игры
+        try {
+            GameDto gameDto = gameService.getMultiplayerGameState(gameCode);
+            return ResponseEntity.ok(gameDto);
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("не найдена")) {
+                return ResponseEntity.status(404).build();
+            }
+            return ResponseEntity.status(403).build();
+        }
+    }
 }
