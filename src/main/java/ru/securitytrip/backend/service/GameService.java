@@ -992,17 +992,15 @@ public class GameService {
         entity.setCode(code);
         entity.setPlayer1Id(userId);
         entity.setCurrentTurn("player1");
-        
         try {
             // Инициализируем пустые доски и корабли для player2
             int[][] emptyBoard = new int[10][10];
             List<ShipDto> emptyShips = new ArrayList<>();
-            
-            // Generate and set ship positions for player 1
+            // --- ГАРАНТИРУЕМ заполнение hits и positions ---
             for (ShipDto ship : ships) {
-                 ship.setPositions(generateShipPositionsFromShipDto(ship));
+                ship.setPositions(generateShipPositionsFromShipDto(ship));
+                ship.setHits(new boolean[ship.getSize()]);
             }
-            
             // Сохраняем данные игрока 1
             entity.setPlayer1ShipsJson(objectMapper.writeValueAsString(ships));
             int[][] player1Board = generateBoardWithShips(ships);
@@ -1056,25 +1054,24 @@ public class GameService {
     public GameDto joinMultiplayerGame(String gameCode, Long userId, List<ShipDto> ships) {
         MultiplayerRoomEntity entity = multiplayerRoomRepository.findById(gameCode)
             .orElseThrow(() -> new RuntimeException("Комната не найдена или уже заполнена"));
-        
         if (entity.getPlayer2Id() != null) {
             throw new RuntimeException("Комната уже заполнена");
         }
         if (userId.equals(entity.getPlayer1Id())) {
             throw new RuntimeException("Хост не может быть гостем в своей комнате");
         }
-        
         entity.setPlayer2Id(userId);
         try {
-            // Generate and set ship positions for player 2
+            // --- ГАРАНТИРУЕМ заполнение hits и positions ---
             for (ShipDto ship : ships) {
                 if (ship.getPositions() == null) {
                     ship.setPositions(generateShipPositionsFromShipDto(ship));
                 }
+                if (ship.getHits() == null) {
+                    ship.setHits(new boolean[ship.getSize()]);
+                }
             }
             entity.setPlayer2ShipsJson(objectMapper.writeValueAsString(ships));
-            
-            // Generate and set player 2's board with ships
             int[][] player2Board = generateBoardWithShips(ships);
             entity.setPlayer2BoardJson(objectMapper.writeValueAsString(player2Board));
 
@@ -1082,41 +1079,39 @@ public class GameService {
             List<ShipDto> player1Ships = objectMapper.readValue(entity.getPlayer1ShipsJson(), new com.fasterxml.jackson.core.type.TypeReference<List<ShipDto>>() {});
             int[][] player1Board = objectMapper.readValue(entity.getPlayer1BoardJson(), int[][].class);
 
-            // Создаем GameDto для игрока 2
+            // --- GameDto для игрока 2 ---
             GameDto player2GameState = new GameDto();
             player2GameState.setMode(GameMode.multiplayer);
             player2GameState.setGameState(GameState.IN_PROGRESS);
             player2GameState.setPlayerTurn(false); // Первый ход за игроком 1
 
-            // Для игрока 2 его поле - playerBoard, поле игрока 1 - computerBoard
             GameBoardDto player2BoardDto = new GameBoardDto();
             player2BoardDto.setBoard(player2Board);
             player2BoardDto.setShips(ships);
             player2BoardDto.setComputer(false);
 
             GameBoardDto player1BoardDto = new GameBoardDto();
-            player1BoardDto.setBoard(player1Board);
-            player1BoardDto.setShips(player1Ships);
+            player1BoardDto.setBoard(hideShipsOnBoard(player1Board));
+            player1BoardDto.setShips(new ArrayList<>());
             player1BoardDto.setComputer(true);
 
             player2GameState.setPlayerBoard(player2BoardDto);
             player2GameState.setComputerBoard(player1BoardDto);
 
-            // Создаем GameDto для игрока 1
+            // --- GameDto для игрока 1 ---
             GameDto player1GameState = new GameDto();
             player1GameState.setMode(GameMode.multiplayer);
             player1GameState.setGameState(GameState.IN_PROGRESS);
             player1GameState.setPlayerTurn(true); // Первый ход за игроком 1
 
-            // Для игрока 1 его поле - playerBoard, поле игрока 2 - computerBoard
             GameBoardDto player1BoardDto2 = new GameBoardDto();
             player1BoardDto2.setBoard(player1Board);
             player1BoardDto2.setShips(player1Ships);
             player1BoardDto2.setComputer(false);
 
             GameBoardDto player2BoardDto2 = new GameBoardDto();
-            player2BoardDto2.setBoard(player2Board);
-            player2BoardDto2.setShips(ships);
+            player2BoardDto2.setBoard(hideShipsOnBoard(player2Board));
+            player2BoardDto2.setShips(new ArrayList<>());
             player2BoardDto2.setComputer(true);
 
             player1GameState.setPlayerBoard(player1BoardDto2);
@@ -1137,14 +1132,6 @@ public class GameService {
         }
     }
 
-    // --- МУЛЬТИПЛЕЕРНЫЕ МЕТОДЫ ---
-    /**
-     * Выполнить ход в мультиплеерной игре
-     * @param gameCode код комнаты
-     * @param userId id пользователя
-     * @param moveRequest координаты хода
-     * @return актуальное состояние игры (GameDto)
-     */
     @Transactional
     public GameDto makeMultiplayerMove(String gameCode, Long userId, MoveRequest moveRequest) {
         MultiplayerRoomEntity entity = multiplayerRoomRepository.findById(gameCode)
@@ -1154,7 +1141,6 @@ public class GameService {
             throw new RuntimeException("Ожидание второго игрока");
         }
 
-        // Определяем, чей ход
         boolean isPlayer1 = userId.equals(entity.getPlayer1Id());
         boolean isPlayer2 = userId.equals(entity.getPlayer2Id());
         if (!isPlayer1 && !isPlayer2) {
@@ -1167,30 +1153,21 @@ public class GameService {
         }
 
         try {
-            // Получаем текущее состояние игры
             GameDto gameState = objectMapper.readValue(entity.getGameStateJson(), GameDto.class);
-            
-            // Проверяем, что игра в процессе
             if (gameState.getGameState() != GameState.IN_PROGRESS) {
                 throw new RuntimeException("Игра не в процессе");
             }
-
-            // Получаем доски и корабли
             int[][] player1Board = objectMapper.readValue(entity.getPlayer1BoardJson(), int[][].class);
             int[][] player2Board = objectMapper.readValue(entity.getPlayer2BoardJson(), int[][].class);
-            List<ShipDto> player1Ships = objectMapper.readValue(entity.getPlayer1ShipsJson(), 
-                new com.fasterxml.jackson.core.type.TypeReference<List<ShipDto>>() {});
-            List<ShipDto> player2Ships = objectMapper.readValue(entity.getPlayer2ShipsJson(), 
-                new com.fasterxml.jackson.core.type.TypeReference<List<ShipDto>>() {});
+            List<ShipDto> player1Ships = objectMapper.readValue(entity.getPlayer1ShipsJson(), new com.fasterxml.jackson.core.type.TypeReference<List<ShipDto>>() {});
+            List<ShipDto> player2Ships = objectMapper.readValue(entity.getPlayer2ShipsJson(), new com.fasterxml.jackson.core.type.TypeReference<List<ShipDto>>() {});
 
-            // Определяем, по какой доске делается ход
             int[][] targetBoard = isPlayer1 ? player2Board : player1Board;
             List<ShipDto> targetShips = isPlayer1 ? player2Ships : player1Ships;
 
             int x = moveRequest.getX();
             int y = moveRequest.getY();
 
-            // Проверка координат
             if (x < 0 || x >= 10 || y < 0 || y >= 10) {
                 throw new RuntimeException("Недопустимые координаты");
             }
@@ -1198,35 +1175,27 @@ public class GameService {
                 throw new RuntimeException("По этой клетке уже стреляли");
             }
 
-            // Проверяем попадание
             boolean hit = false;
             boolean sunk = false;
             boolean gameOver = false;
 
-            // Обновляем доску противника
             if (targetBoard[y][x] == 1) {
                 hit = true;
-                targetBoard[y][x] = 3; // Попадание
-                // Проверяем, потоплен ли корабль
+                targetBoard[y][x] = 3;
                 sunk = checkShipSunk(targetShips, targetBoard, x, y);
-                // Проверяем, закончена ли игра
                 gameOver = checkGameOver(targetBoard);
             } else {
-                targetBoard[y][x] = 2; // Промах
+                targetBoard[y][x] = 2;
             }
 
-            // Обновляем ход
             String nextTurn = isPlayer1 ? "player2" : "player1";
             entity.setCurrentTurn(nextTurn);
 
-            // Обновляем состояние игры
             if (gameOver) {
                 gameState.setGameState(isPlayer1 ? GameState.PLAYER_WON : GameState.COMPUTER_WON);
             }
-            // Обновляем флаг хода в GameDto для текущего игрока
             gameState.setPlayerTurn(hit ? (isPlayer1) : (!isPlayer1));
 
-            // Обновляем доски в базе данных
             if (isPlayer1) {
                 entity.setPlayer2BoardJson(objectMapper.writeValueAsString(targetBoard));
                 entity.setPlayer2ShipsJson(objectMapper.writeValueAsString(targetShips));
@@ -1235,30 +1204,31 @@ public class GameService {
                 entity.setPlayer1ShipsJson(objectMapper.writeValueAsString(targetShips));
             }
 
-            // Обновляем GameDto для текущего игрока
             GameBoardDto playerBoardDto = new GameBoardDto();
             GameBoardDto opponentBoardDto = new GameBoardDto();
 
             if (isPlayer1) {
                 playerBoardDto.setBoard(player1Board);
                 playerBoardDto.setShips(player1Ships);
-                opponentBoardDto.setBoard(player2Board);
-                opponentBoardDto.setShips(player2Ships);
+                playerBoardDto.setComputer(false);
+
+                opponentBoardDto.setBoard(hideShipsOnBoard(player2Board));
+                opponentBoardDto.setShips(new ArrayList<>());
+                opponentBoardDto.setComputer(true);
             } else {
                 playerBoardDto.setBoard(player2Board);
                 playerBoardDto.setShips(player2Ships);
-                opponentBoardDto.setBoard(player1Board);
-                opponentBoardDto.setShips(player1Ships);
-            }
+                playerBoardDto.setComputer(false);
 
-            playerBoardDto.setComputer(false);
-            opponentBoardDto.setComputer(true);
+                opponentBoardDto.setBoard(hideShipsOnBoard(player1Board));
+                opponentBoardDto.setShips(new ArrayList<>());
+                opponentBoardDto.setComputer(true);
+            }
 
             gameState.setPlayerBoard(playerBoardDto);
             gameState.setComputerBoard(opponentBoardDto);
             gameState.setMode(GameMode.multiplayer);
 
-            // Сохраняем обновленное состояние
             entity.setGameStateJson(objectMapper.writeValueAsString(gameState));
             multiplayerRoomRepository.save(entity);
 
@@ -1268,12 +1238,7 @@ public class GameService {
             throw new RuntimeException("Ошибка при выполнении хода: " + e.getMessage(), e);
         }
     }
-
-    /**
-     * Получить состояние мультиплеерной игры по коду
-     * @param gameCode код комнаты
-     * @return GameDto
-     */
+    
     @Transactional(readOnly = true)
     public GameDto getMultiplayerGameState(String gameCode) {
         logger.info("Ищу комнату с кодом: {}", gameCode);
@@ -1305,6 +1270,98 @@ public class GameService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public GameDto getMultiplayerGameState(String gameCode, Long userId) {
+        logger.info("Ищу комнату с кодом: {} для userId={}", gameCode, userId);
+        String cleanCode = gameCode;
+        MultiplayerRoomEntity entity = multiplayerRoomRepository.findById(cleanCode)
+                .orElseThrow(() -> new RuntimeException("Комната не найдена"));
+        try {
+            // Получаем корабли и доски обоих игроков
+            List<ShipDto> player1Ships = entity.getPlayer1ShipsJson() != null ?
+                objectMapper.readValue(entity.getPlayer1ShipsJson(), new com.fasterxml.jackson.core.type.TypeReference<List<ShipDto>>() {}) : new ArrayList<>();
+            int[][] player1Board = entity.getPlayer1BoardJson() != null ?
+                objectMapper.readValue(entity.getPlayer1BoardJson(), int[][].class) : new int[10][10];
+            List<ShipDto> player2Ships = entity.getPlayer2ShipsJson() != null ?
+                objectMapper.readValue(entity.getPlayer2ShipsJson(), new com.fasterxml.jackson.core.type.TypeReference<List<ShipDto>>() {}) : new ArrayList<>();
+            int[][] player2Board = entity.getPlayer2BoardJson() != null ?
+                objectMapper.readValue(entity.getPlayer2BoardJson(), int[][].class) : new int[10][10];
+
+            boolean isPlayer1 = userId != null && userId.equals(entity.getPlayer1Id());
+            boolean isPlayer2 = userId != null && entity.getPlayer2Id() != null && userId.equals(entity.getPlayer2Id());
+
+            GameDto gameState = new GameDto();
+            gameState.setMode(GameMode.multiplayer);
+            // Определяем состояние игры
+            if (entity.getPlayer2Id() == null) {
+                gameState.setGameState(GameState.WAITING);
+                gameState.setPlayerTurn(false);
+            } else {
+                gameState.setGameState(GameState.IN_PROGRESS);
+                gameState.setPlayerTurn((isPlayer1 && "player1".equals(entity.getCurrentTurn())) || (isPlayer2 && "player2".equals(entity.getCurrentTurn())));
+            }
+
+            // Для каждого игрока формируем индивидуальное отображение
+            if (isPlayer1) {
+                // playerBoard: свои корабли и все попадания/промахи
+                GameBoardDto playerBoardDto = new GameBoardDto();
+                playerBoardDto.setBoard(player1Board);
+                playerBoardDto.setShips(player1Ships);
+                playerBoardDto.setComputer(false);
+                // computerBoard: только попадания/промахи по полю противника, корабли не показываем
+                GameBoardDto opponentBoardDto = new GameBoardDto();
+                if (entity.getPlayer2Id() == null) {
+                    // Противник не подключился — пустое поле
+                    opponentBoardDto.setBoard(new int[10][10]);
+                    opponentBoardDto.setShips(new ArrayList<>());
+                } else {
+                    opponentBoardDto.setBoard(hideShipsOnBoard(player2Board));
+                    opponentBoardDto.setShips(new ArrayList<>()); // не показываем корабли противника
+                }
+                opponentBoardDto.setComputer(true);
+                gameState.setPlayerBoard(playerBoardDto);
+                gameState.setComputerBoard(opponentBoardDto);
+            } else if (isPlayer2) {
+                GameBoardDto playerBoardDto = new GameBoardDto();
+                playerBoardDto.setBoard(player2Board);
+                playerBoardDto.setShips(player2Ships);
+                playerBoardDto.setComputer(false);
+                GameBoardDto opponentBoardDto = new GameBoardDto();
+                if (player1Board == null || player1Board.length != 10) {
+                    opponentBoardDto.setBoard(new int[10][10]);
+                } else {
+                    opponentBoardDto.setBoard(hideShipsOnBoard(player1Board));
+                }
+                opponentBoardDto.setShips(new ArrayList<>());
+                opponentBoardDto.setComputer(true);
+                gameState.setPlayerBoard(playerBoardDto);
+                gameState.setComputerBoard(opponentBoardDto);
+            } else {
+                // Неизвестный пользователь — ничего не показываем, но оба поля должны быть
+                gameState.setPlayerBoard(new GameBoardDto());
+                gameState.setComputerBoard(new GameBoardDto());
+            }
+            return gameState;
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка сериализации/десериализации комнаты", e);
+        }
+    }
+
+    // Скрывает корабли на доске: оставляет только попадания (3) и промахи (2), все 1 превращает в 0
+    private int[][] hideShipsOnBoard(int[][] board) {
+        int[][] result = new int[10][10];
+        for (int y = 0; y < 10; y++) {
+            for (int x = 0; x < 10; x++) {
+                if (board[y][x] == 2 || board[y][x] == 3) {
+                    result[y][x] = board[y][x];
+                } else {
+                    result[y][x] = 0;
+                }
+            }
+        }
+        return result;
+    }
+    
     private boolean checkShipSunk(List<ShipDto> ships, int[][] board, int x, int y) {
         for (ShipDto ship : ships) {
             List<int[]> positions = ship.getPositions();

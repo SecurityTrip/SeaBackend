@@ -341,9 +341,11 @@ public class GameController {
     public ResponseEntity<GameDto> getMultiplayerGameState(
             @Parameter(description = "Код комнаты (gameCode)", required = true)
             @PathVariable String gameCode) {
-        // Можно добавить проверку, что пользователь действительно участник этой игры
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String username = authentication.getName();
+        Long userId = getUserIdOrGenerateFromUsername(username);
         try {
-            GameDto gameDto = gameService.getMultiplayerGameState(gameCode);
+            GameDto gameDto = gameService.getMultiplayerGameState(gameCode, userId);
             return ResponseEntity.ok(gameDto);
         } catch (RuntimeException e) {
             if (e.getMessage() != null && e.getMessage().contains("не найдена")) {

@@ -10,7 +10,6 @@ import lombok.Setter;
 @Table(name = "multiplayer_rooms")
 public class MultiplayerRoomEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private String code;
 
     private Long player1Id;
@@ -26,10 +25,10 @@ public class MultiplayerRoomEntity {
     @Lob
     private String player2BoardJson;
 
-    private String currentTurn; // "player1" или "player2"
+    private String currentTurn;
 
     @Lob
-    private String gameStateJson; // сериализованный GameDto
+    private String gameStateJson;
 
     @Enumerated(EnumType.STRING)
     private GameMode gameMode;
