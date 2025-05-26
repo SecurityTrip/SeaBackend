@@ -29,6 +29,31 @@ public class MultiplayerGameWebSocketController {
     @Autowired
     private GameService gameService;
 
+    @Operation(summary = "Размещение кораблей хоста", description = "Хост отправляет свою расстановку кораблей после создания комнаты.\n\n**Отправить:** PlaceHostShipsRequest на /app/multiplayer.place\n**Получить:** GameDto по /topic/multiplayer/place.\n\nПример запроса:\n```json\n{\n  \"gameCode\": \"ABC123\",\n  \"ships\": [ ... ],\n  \"userId\": 123456\n}\n```\n\nОшибки:\n- 400: Некорректный код или запрос\n- 404: Игра не найдена\n")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Корабли успешно размещены", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = GameDto.class))),
+            @ApiResponse(responseCode = "400", description = "Некорректный код игры или запрос", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "404", description = "Игра не найдена", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "500", description = "Ошибка сервера", content = @io.swagger.v3.oas.annotations.media.Content)
+    })
+    @MessageMapping("/multiplayer.place")
+    @SendTo("/topic/multiplayer/place")
+    public GameDto placeHostShips(@Payload PlaceHostShipsRequest request, SimpMessageHeaderAccessor headerAccessor) {
+        Long userId = request.getUserId();
+        String username = "anonymous";
+        Object userObj = headerAccessor.getUser();
+        if (userObj != null) {
+            String name = ((java.security.Principal)userObj).getName();
+            if (name != null) {
+                username = name;
+            }
+        }
+        logger.info("[MULTIPLAYER] Хост {} (userId={}) размещает корабли в комнате {}: {}", username, userId, request.getGameCode(), request.getShips());
+        GameDto dto = gameService.placeHostShips(request.getGameCode(), userId, request.getShips());
+        logger.info("[MULTIPLAYER] Корабли хоста размещены для userId={} в комнате {}", userId, request.getGameCode());
+        return dto;
+    }
+
     // Создание игры, генерация кода
     @Operation(summary = "Создание мультиплеерной игры", description = "Создаёт новую комнату для мультиплеерной игры.\n\n**Отправить:** CreateMultiplayerGameRequest на /app/multiplayer.create\n**Получить:** MultiplayerGameCodeResponse по /topic/multiplayer/code.\n\nПример запроса:\n```json\n{\n  \"ships\": [\n    {\"size\": 4, \"x\": 0, \"y\": 0, \"horizontal\": true}\n  ],\n  \"userId\": 123456\n}\n```\n\nПример ответа:\n```json\n{\n  \"gameCode\": \"ABC123\"\n}\n```")
     @ApiResponses(value = {
