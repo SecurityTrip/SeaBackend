@@ -14,7 +14,11 @@ public class JoinMultiplayerGameRequest {
     private String gameCode;
     @Schema(description = "Расстановка кораблей игрока")
     private java.util.List<ShipDto> ships;
+    @Schema(description = "ID пользователя (уникальный для каждого клиента)")
+    private Long userId;
 
     public String getGameCode() { return gameCode; }
     public java.util.List<ShipDto> getShips() { return ships; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 }

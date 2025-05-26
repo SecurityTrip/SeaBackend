@@ -493,19 +493,21 @@ public class GameService {
         }
 
         // Генерируем и устанавливаем позиции корабля в DTO
-        // Убедимся, что у Ship есть метод getCoordinates()
-        dto.setPositions(generateShipPositionsFromShip(ship));
+        dto.setPositions(generateShipPositionsFromShipDto(dto));
 
         return dto;
     }
 
     // Генерация позиций корабля из ShipDto
-    private java.util.List<int[]> generateShipPositionsFromShipDto(ShipDto ship) {
-        java.util.List<int[]> positions = new java.util.ArrayList<>();
+    private List<int[]> generateShipPositionsFromShipDto(ShipDto ship) {
+        List<int[]> positions = new ArrayList<>();
+        int size = ship.getSize();
         int x = ship.getX();
         int y = ship.getY();
-        for (int i = 0; i < ship.getSize(); i++) {
-            if (ship.isHorizontal()) {
+        boolean isHorizontal = ship.isHorizontal();
+
+        for (int i = 0; i < size; i++) {
+            if (isHorizontal) {
                 positions.add(new int[]{x + i, y});
             } else {
                 positions.add(new int[]{x, y + i});
@@ -515,8 +517,8 @@ public class GameService {
     }
 
     // Генерация позиций корабля из Ship модели
-    private java.util.List<int[]> generateShipPositionsFromShip(Ship ship) {
-        java.util.List<int[]> positions = new java.util.ArrayList<>();
+    private List<int[]> generateShipPositionsFromShip(Ship ship) {
+        List<int[]> positions = new ArrayList<>();
         int x = ship.getX();
         int y = ship.getY();
         for (int i = 0; i < ship.getSize(); i++) {
@@ -969,7 +971,7 @@ public class GameService {
         for (ShipDto ship : ships) {
             // Ensure positions are generated if not already present
             if (ship.getPositions() == null) {
-                 ship.setPositions(generateShipPositionsFromShipDto(ship));
+                ship.setPositions(generateShipPositionsFromShipDto(ship));
             }
             for (int[] pos : ship.getPositions()) {
                 int x = pos[0];
@@ -1018,11 +1020,13 @@ public class GameService {
             
             // Для хоста его поле - playerBoard, поле противника пока пустое - computerBoard
             GameBoardDto hostBoardDto = new GameBoardDto();
+            hostBoardDto.setId(entity.getPlayer1Id()); // Устанавливаем id игрока 1
             hostBoardDto.setBoard(player1Board);
             hostBoardDto.setShips(ships);
             hostBoardDto.setComputer(false);
 
             GameBoardDto emptyOpponentBoardDto = new GameBoardDto();
+            emptyOpponentBoardDto.setId(entity.getPlayer2Id()); // Устанавливаем id игрока 2
             emptyOpponentBoardDto.setBoard(emptyBoard);
             emptyOpponentBoardDto.setShips(emptyShips);
             emptyOpponentBoardDto.setComputer(true);
@@ -1057,9 +1061,6 @@ public class GameService {
         if (entity.getPlayer2Id() != null) {
             throw new RuntimeException("Комната уже заполнена");
         }
-        if (userId.equals(entity.getPlayer1Id())) {
-            throw new RuntimeException("Хост не может быть гостем в своей комнате");
-        }
         entity.setPlayer2Id(userId);
         try {
             // --- ГАРАНТИРУЕМ заполнение hits и positions ---
@@ -1081,16 +1082,20 @@ public class GameService {
 
             // --- GameDto для игрока 2 ---
             GameDto player2GameState = new GameDto();
+            player2GameState.setId(userId); // Устанавливаем id игрока
             player2GameState.setMode(GameMode.multiplayer);
             player2GameState.setGameState(GameState.IN_PROGRESS);
             player2GameState.setPlayerTurn(false); // Первый ход за игроком 1
+            player2GameState.setGameCode(gameCode); // Устанавливаем код игры
 
             GameBoardDto player2BoardDto = new GameBoardDto();
+            player2BoardDto.setId(entity.getPlayer2Id()); // Устанавливаем id игрока 2
             player2BoardDto.setBoard(player2Board);
             player2BoardDto.setShips(ships);
             player2BoardDto.setComputer(false);
 
             GameBoardDto player1BoardDto = new GameBoardDto();
+            player1BoardDto.setId(entity.getPlayer1Id()); // Устанавливаем id игрока 1
             player1BoardDto.setBoard(hideShipsOnBoard(player1Board));
             player1BoardDto.setShips(new ArrayList<>());
             player1BoardDto.setComputer(true);
@@ -1100,16 +1105,20 @@ public class GameService {
 
             // --- GameDto для игрока 1 ---
             GameDto player1GameState = new GameDto();
+            player1GameState.setId(entity.getPlayer1Id()); // Устанавливаем id игрока 1
             player1GameState.setMode(GameMode.multiplayer);
             player1GameState.setGameState(GameState.IN_PROGRESS);
             player1GameState.setPlayerTurn(true); // Первый ход за игроком 1
+            player1GameState.setGameCode(gameCode); // Устанавливаем код игры
 
             GameBoardDto player1BoardDto2 = new GameBoardDto();
+            player1BoardDto2.setId(entity.getPlayer1Id()); // Устанавливаем id игрока 1
             player1BoardDto2.setBoard(player1Board);
             player1BoardDto2.setShips(player1Ships);
             player1BoardDto2.setComputer(false);
 
             GameBoardDto player2BoardDto2 = new GameBoardDto();
+            player2BoardDto2.setId(entity.getPlayer2Id()); // Устанавливаем id игрока 2
             player2BoardDto2.setBoard(hideShipsOnBoard(player2Board));
             player2BoardDto2.setShips(new ArrayList<>());
             player2BoardDto2.setComputer(true);
@@ -1121,10 +1130,11 @@ public class GameService {
             entity.setGameStateJson(objectMapper.writeValueAsString(player1GameState));
             entity.setCurrentTurn("player1"); // Первый ход за игроком 1
 
-            multiplayerRoomRepository.save(entity);
+            // Сохраняем изменения в базе данных
+            entity = multiplayerRoomRepository.save(entity);
+            multiplayerRoomRepository.flush();
 
             // Возвращаем состояние для игрока 2
-            player2GameState.setGameCode(gameCode); // <--- добавлено
             return player2GameState;
 
         } catch (Exception e) {
@@ -1145,11 +1155,6 @@ public class GameService {
         boolean isPlayer2 = userId.equals(entity.getPlayer2Id());
         if (!isPlayer1 && !isPlayer2) {
             throw new RuntimeException("Вы не участник этой игры");
-        }
-
-        String expectedTurn = entity.getCurrentTurn();
-        if ((isPlayer1 && !"player1".equals(expectedTurn)) || (isPlayer2 && !"player2".equals(expectedTurn))) {
-            throw new RuntimeException("Сейчас не ваш ход");
         }
 
         try {
@@ -1208,26 +1213,58 @@ public class GameService {
             GameBoardDto opponentBoardDto = new GameBoardDto();
 
             if (isPlayer1) {
+                playerBoardDto.setId(entity.getPlayer1Id()); // Устанавливаем id игрока 1
                 playerBoardDto.setBoard(player1Board);
                 playerBoardDto.setShips(player1Ships);
                 playerBoardDto.setComputer(false);
 
-                opponentBoardDto.setBoard(hideShipsOnBoard(player2Board));
-                opponentBoardDto.setShips(new ArrayList<>());
+                opponentBoardDto.setId(entity.getPlayer2Id()); // Устанавливаем id игрока 2
+                if (entity.getPlayer2Id() == null) {
+                    // Противник не подключился — пустое поле
+                    opponentBoardDto.setBoard(new int[10][10]);
+                    opponentBoardDto.setShips(new ArrayList<>());
+                } else {
+                    opponentBoardDto.setBoard(hideShipsOnBoard(player2Board));
+                    opponentBoardDto.setShips(new ArrayList<>()); // не показываем корабли противника
+                }
                 opponentBoardDto.setComputer(true);
-            } else {
+                gameState.setPlayerBoard(playerBoardDto);
+                gameState.setComputerBoard(opponentBoardDto);
+            } else if (isPlayer2) {
+                playerBoardDto.setId(entity.getPlayer2Id()); // Устанавливаем id игрока 2
                 playerBoardDto.setBoard(player2Board);
                 playerBoardDto.setShips(player2Ships);
                 playerBoardDto.setComputer(false);
 
-                opponentBoardDto.setBoard(hideShipsOnBoard(player1Board));
+                opponentBoardDto.setId(entity.getPlayer1Id()); // Устанавливаем id игрока 1
+                if (player1Board == null || player1Board.length != 10) {
+                    opponentBoardDto.setBoard(new int[10][10]);
+                } else {
+                    opponentBoardDto.setBoard(hideShipsOnBoard(player1Board));
+                }
                 opponentBoardDto.setShips(new ArrayList<>());
                 opponentBoardDto.setComputer(true);
+                gameState.setPlayerBoard(playerBoardDto);
+                gameState.setComputerBoard(opponentBoardDto);
+            } else {
+                // Неизвестный пользователь — ничего не показываем, но оба поля должны быть
+                GameBoardDto emptyPlayerBoard = new GameBoardDto();
+                emptyPlayerBoard.setId(userId); // Устанавливаем id текущего пользователя
+                emptyPlayerBoard.setBoard(new int[10][10]);
+                emptyPlayerBoard.setShips(new ArrayList<>());
+                emptyPlayerBoard.setComputer(false);
+                
+                GameBoardDto emptyOpponentBoard = new GameBoardDto();
+                emptyOpponentBoard.setId(null); // Для неизвестного пользователя id противника null
+                emptyOpponentBoard.setBoard(new int[10][10]);
+                emptyOpponentBoard.setShips(new ArrayList<>());
+                emptyOpponentBoard.setComputer(true);
+                
+                gameState.setPlayerBoard(emptyPlayerBoard);
+                gameState.setComputerBoard(emptyOpponentBoard);
             }
-
-            gameState.setPlayerBoard(playerBoardDto);
-            gameState.setComputerBoard(opponentBoardDto);
             gameState.setMode(GameMode.multiplayer);
+            gameState.setGameCode(gameCode); // Гарантируем, что gameCode всегда установлен
 
             entity.setGameStateJson(objectMapper.writeValueAsString(gameState));
             multiplayerRoomRepository.save(entity);
@@ -1263,6 +1300,7 @@ public class GameService {
             GameDto gameState = objectMapper.readValue(entity.getGameStateJson(), GameDto.class);
             // Устанавливаем режим игры из сущности
             gameState.setMode(entity.getGameMode());
+            gameState.setGameCode(cleanCode); // Добавляем установку gameCode
             return gameState;
         } catch (Exception e) {
             logger.error("Ошибка при десериализации состояния игры: {}", e.getMessage(), e);
@@ -1291,6 +1329,7 @@ public class GameService {
             boolean isPlayer2 = userId != null && entity.getPlayer2Id() != null && userId.equals(entity.getPlayer2Id());
 
             GameDto gameState = new GameDto();
+            gameState.setId(userId); // Устанавливаем id игрока
             gameState.setMode(GameMode.multiplayer);
             // Определяем состояние игры
             if (entity.getPlayer2Id() == null) {
@@ -1298,18 +1337,28 @@ public class GameService {
                 gameState.setPlayerTurn(false);
             } else {
                 gameState.setGameState(GameState.IN_PROGRESS);
-                gameState.setPlayerTurn((isPlayer1 && "player1".equals(entity.getCurrentTurn())) || (isPlayer2 && "player2".equals(entity.getCurrentTurn())));
+                // Исправляем логику определения чей ход
+                String currentTurn = entity.getCurrentTurn();
+                if (isPlayer1) {
+                    gameState.setPlayerTurn("player1".equals(currentTurn));
+                } else if (isPlayer2) {
+                    gameState.setPlayerTurn("player2".equals(currentTurn));
+                } else {
+                    gameState.setPlayerTurn(false);
+                }
             }
 
             // Для каждого игрока формируем индивидуальное отображение
             if (isPlayer1) {
                 // playerBoard: свои корабли и все попадания/промахи
                 GameBoardDto playerBoardDto = new GameBoardDto();
+                playerBoardDto.setId(entity.getPlayer1Id()); // Устанавливаем id игрока 1
                 playerBoardDto.setBoard(player1Board);
                 playerBoardDto.setShips(player1Ships);
                 playerBoardDto.setComputer(false);
                 // computerBoard: только попадания/промахи по полю противника, корабли не показываем
                 GameBoardDto opponentBoardDto = new GameBoardDto();
+                opponentBoardDto.setId(entity.getPlayer2Id()); // Устанавливаем id игрока 2
                 if (entity.getPlayer2Id() == null) {
                     // Противник не подключился — пустое поле
                     opponentBoardDto.setBoard(new int[10][10]);
@@ -1323,10 +1372,12 @@ public class GameService {
                 gameState.setComputerBoard(opponentBoardDto);
             } else if (isPlayer2) {
                 GameBoardDto playerBoardDto = new GameBoardDto();
+                playerBoardDto.setId(entity.getPlayer2Id()); // Устанавливаем id игрока 2
                 playerBoardDto.setBoard(player2Board);
                 playerBoardDto.setShips(player2Ships);
                 playerBoardDto.setComputer(false);
                 GameBoardDto opponentBoardDto = new GameBoardDto();
+                opponentBoardDto.setId(entity.getPlayer1Id()); // Устанавливаем id игрока 1
                 if (player1Board == null || player1Board.length != 10) {
                     opponentBoardDto.setBoard(new int[10][10]);
                 } else {
@@ -1338,9 +1389,22 @@ public class GameService {
                 gameState.setComputerBoard(opponentBoardDto);
             } else {
                 // Неизвестный пользователь — ничего не показываем, но оба поля должны быть
-                gameState.setPlayerBoard(new GameBoardDto());
-                gameState.setComputerBoard(new GameBoardDto());
+                GameBoardDto emptyPlayerBoard = new GameBoardDto();
+                emptyPlayerBoard.setId(userId); // Устанавливаем id текущего пользователя
+                emptyPlayerBoard.setBoard(new int[10][10]);
+                emptyPlayerBoard.setShips(new ArrayList<>());
+                emptyPlayerBoard.setComputer(false);
+                
+                GameBoardDto emptyOpponentBoard = new GameBoardDto();
+                emptyOpponentBoard.setId(null); // Для неизвестного пользователя id противника null
+                emptyOpponentBoard.setBoard(new int[10][10]);
+                emptyOpponentBoard.setShips(new ArrayList<>());
+                emptyOpponentBoard.setComputer(true);
+                
+                gameState.setPlayerBoard(emptyPlayerBoard);
+                gameState.setComputerBoard(emptyOpponentBoard);
             }
+            gameState.setGameCode(cleanCode); // Устанавливаем код комнаты в DTO
             return gameState;
         } catch (Exception e) {
             throw new RuntimeException("Ошибка сериализации/десериализации комнаты", e);

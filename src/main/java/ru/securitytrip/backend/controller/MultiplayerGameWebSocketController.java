@@ -9,6 +9,7 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 import ru.securitytrip.backend.dto.*;
@@ -29,7 +30,7 @@ public class MultiplayerGameWebSocketController {
     private GameService gameService;
 
     // Создание игры, генерация кода
-    @Operation(summary = "Создание мультиплеерной игры", description = "Создаёт новую комнату для мультиплеерной игры.\n\n**Отправить:** CreateMultiplayerGameRequest на /app/multiplayer.create\n**Получить:** MultiplayerGameCodeResponse по /topic/multiplayer/code.\n\nПример запроса:\n```json\n{\n  \"ships\": [\n    {\"size\": 4, \"x\": 0, \"y\": 0, \"horizontal\": true}\n  ]\n}\n```\n\nПример ответа:\n```json\n{\n  \"gameCode\": \"ABC123\"\n}\n```\n")
+    @Operation(summary = "Создание мультиплеерной игры", description = "Создаёт новую комнату для мультиплеерной игры.\n\n**Отправить:** CreateMultiplayerGameRequest на /app/multiplayer.create\n**Получить:** MultiplayerGameCodeResponse по /topic/multiplayer/code.\n\nПример запроса:\n```json\n{\n  \"ships\": [\n    {\"size\": 4, \"x\": 0, \"y\": 0, \"horizontal\": true}\n  ],\n  \"userId\": 123456\n}\n```\n\nПример ответа:\n```json\n{\n  \"gameCode\": \"ABC123\"\n}\n```")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Игра успешно создана", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = MultiplayerGameCodeResponse.class))),
             @ApiResponse(responseCode = "400", description = "Некорректный запрос", content = @io.swagger.v3.oas.annotations.media.Content),
@@ -38,8 +39,8 @@ public class MultiplayerGameWebSocketController {
     @MessageMapping("/multiplayer.create")
     @SendTo("/topic/multiplayer/code")
     public MultiplayerGameCodeResponse createMultiplayerGame(@Payload CreateMultiplayerGameRequest request, SimpMessageHeaderAccessor headerAccessor) {
+        Long userId = request.getUserId();
         String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
-        Long userId = Math.abs((long) username.hashCode());
         logger.info("[MULTIPLAYER] Запрос на создание комнаты от пользователя: {} (userId={}), ships={}", username, userId, request.getShips());
         String gameCode = gameService.createMultiplayerGame(userId, request.getShips());
         logger.info("[MULTIPLAYER] Комната создана: {} для userId={}", gameCode, userId);
@@ -57,8 +58,15 @@ public class MultiplayerGameWebSocketController {
     @MessageMapping("/multiplayer.join")
     @SendTo("/topic/multiplayer/join")
     public GameDto joinMultiplayerGame(@Payload JoinMultiplayerGameRequest request, SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
-        Long userId = Math.abs((long) username.hashCode());
+        Long userId = request.getUserId();
+        String username = "anonymous";
+        Object userObj = headerAccessor.getUser();
+        if (userObj != null) {
+            String name = ((java.security.Principal)userObj).getName();
+            if (name != null) {
+                username = name;
+            }
+        }
         logger.info("[MULTIPLAYER] Пользователь {} (userId={}) подключается к комнате {} с кораблями {}", username, userId, request.getGameCode(), request.getShips());
         GameDto dto = gameService.joinMultiplayerGame(request.getGameCode(), userId, request.getShips());
         logger.info("[MULTIPLAYER] Пользователь {} (userId={}) успешно подключён к комнате {}", username, userId, request.getGameCode());
@@ -75,8 +83,15 @@ public class MultiplayerGameWebSocketController {
     @MessageMapping("/multiplayer.move")
     @SendTo("/topic/multiplayer/move")
     public GameDto makeMove(@Payload MoveRequest moveRequest, SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser() != null ? headerAccessor.getUser().getName() : "anonymous";
-        Long userId = Math.abs((long) username.hashCode());
+        Long userId = moveRequest.getUserId();
+        String username = "anonymous";
+        Object userObj = headerAccessor.getUser();
+        if (userObj != null) {
+            String name = ((java.security.Principal)userObj).getName();
+            if (name != null) {
+                username = name;
+            }
+        }
         String gameCode = moveRequest.getGameCode();
         logger.info("[MULTIPLAYER] Пользователь {} (userId={}) делает ход в комнате {}: x={}, y={}", username, userId, gameCode, moveRequest.getX(), moveRequest.getY());
         GameDto dto = gameService.makeMultiplayerMove(gameCode, userId, moveRequest);
@@ -91,13 +106,32 @@ public class MultiplayerGameWebSocketController {
         @ApiResponse(responseCode = "404", description = "Игра не найдена", content = @io.swagger.v3.oas.annotations.media.Content)
     })
     @MessageMapping("/multiplayer.state")
-    @SendTo("/topic/multiplayer/state")
-    public GameDto getGameState(@Payload String gameCode) {
-        logger.info("[MULTIPLAYER] Запрос состояния комнаты {}", gameCode);
-        GameDto gameState = gameService.getMultiplayerGameState(gameCode);
-        // Убедимся, что режим игры установлен как multiplayer
+    @SendToUser("/topic/multiplayer/state")
+    public GameDto getGameState(@Payload MultiplayerGameStateRequest request, SimpMessageHeaderAccessor headerAccessor) {
+        String gameCode = request.getGameCode();
+        Long userId = null;
+        try {
+            userId = Long.parseLong(request.getUserId());
+        } catch (Exception e) {
+            logger.warn("[MULTIPLAYER] Некорректный userId в запросе состояния: {}", request.getUserId());
+        }
+        if (userId == null) {
+            // Fallback: если не удалось — используем старую логику (НЕ рекомендуется)
+            String username = "anonymous";
+            Object userObj = headerAccessor.getUser();
+            if (userObj != null) {
+                String name = ((java.security.Principal)userObj).getName();
+                if (name != null) {
+                    username = name;
+                }
+            }
+            userId = Math.abs((long) username.hashCode());
+        }
+        String cleanCode = gameCode.trim().replaceAll("^[\"']|[\"']$", "");
+        logger.info("[MULTIPLAYER] Запрос состояния комнаты {} (очищено: {}) для userId={}", gameCode, cleanCode, userId);
+        GameDto gameState = gameService.getMultiplayerGameState(cleanCode, userId);
         gameState.setMode(GameMode.multiplayer);
-        logger.info("[MULTIPLAYER] Состояние комнаты {} отправлено", gameCode);
+        logger.info("[MULTIPLAYER] Состояние комнаты {} отправлено для userId={}", cleanCode, userId);
         return gameState;
     }
 }

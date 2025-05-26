@@ -13,5 +13,11 @@ public class CreateMultiplayerGameRequest {
     @Schema(description = "Расстановка кораблей игрока")
     private java.util.List<ShipDto> ships;
 
+    @Schema(description = "userId игрока (генерируется на фронте и передаётся явно)")
+    private Long userId;
+
     public java.util.List<ShipDto> getShips() { return ships; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 }

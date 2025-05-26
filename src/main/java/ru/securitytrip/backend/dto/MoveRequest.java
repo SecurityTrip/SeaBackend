@@ -10,6 +10,10 @@ import lombok.*;
 @AllArgsConstructor
 @Schema(description = "Запрос на выполнение хода в игре")
 public class MoveRequest {
+    @Schema(description = "ID пользователя, совершающего ход", example = "1234567890", required = true)
+    private Long userId;
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
     @Schema(description = "Идентификатор игры", example = "1", required = true)
     private Long gameId;
     
@@ -25,4 +29,7 @@ public class MoveRequest {
     private String gameCode;
     public String getGameCode() { return gameCode; }
     public void setGameCode(String gameCode) { this.gameCode = gameCode; }
+    public int getX() { return x; }
+    public int getY() { return y; }
+    public Long getUserIdField() { return userId; } // для совместимости, если где-то используется
 }
