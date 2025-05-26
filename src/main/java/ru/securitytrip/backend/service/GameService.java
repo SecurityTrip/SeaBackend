@@ -830,9 +830,36 @@ public class GameService {
                 logger.info("Компьютер ПОПАЛ по координатам x={}, y={}", x, y);
                 
                 // Проверяем, потоплен ли корабль
-                if (hitShip.isSunk()) {
-                    logger.info("Компьютер ПОТОПИЛ корабль размером {} по координатам x={}, y={}", 
-                        hitShip.getSize(), x, y);
+                boolean isShipSunk = true;
+                for (boolean hitStatus : hitShip.getHits()) {
+                    if (!hitStatus) {
+                        isShipSunk = false;
+                        break;
+                    }
+                }
+
+                // Если корабль потоплен, помечаем соседние клетки как промах
+                if (isShipSunk) {
+                    for (int[] position : hitShip.getCoordinates()) {
+                        int shipX = position[0];
+                        int shipY = position[1];
+                        
+                        // Проверяем все соседние клетки
+                        for (int dx = -1; dx <= 1; dx++) {
+                            for (int dy = -1; dy <= 1; dy++) {
+                                int nx = shipX + dx;
+                                int ny = shipY + dy;
+                                
+                                // Проверяем границы поля
+                                if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
+                                    // Если клетка пустая (0), помечаем её как промах (2)
+                                    if (boardArray[ny][nx] == 0) {
+                                        boardArray[ny][nx] = 2;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
                 // Промах (2)
@@ -1286,6 +1313,54 @@ public class GameService {
 
             // Обновляем доску
             targetBoard[moveRequest.getY()][moveRequest.getX()] = hit ? 3 : 2;
+
+            // Проверяем, потоплен ли корабль, который был только что подбит
+            ShipDto hitShipDto = null;
+            if (hit) {
+                 for (ShipDto ship : targetShips) {
+                     if (ship.getX() <= moveRequest.getX() && moveRequest.getX() < ship.getX() + (ship.isHorizontal() ? ship.getSize() : 1) &&
+                         ship.getY() <= moveRequest.getY() && moveRequest.getY() < ship.getY() + (ship.isHorizontal() ? 1 : ship.getSize())) {
+                         hitShipDto = ship;
+                         break;
+                     }
+                 }
+             }
+
+            if (hitShipDto != null) {
+                 boolean isShipSunkAfterHit = true;
+                 boolean[] hitsAfterHit = hitShipDto.getHits();
+                 for (boolean h : hitsAfterHit) {
+                     if (!h) {
+                         isShipSunkAfterHit = false;
+                         break;
+                     }
+                 }
+                 sunk = isShipSunkAfterHit; // Обновляем флаг sunk на основе текущего подбитого корабля
+
+                 // Если корабль потоплен, помечаем соседние клетки как промах
+                 if (sunk) {
+                      for (int[] position : generateShipPositionsFromShipDto(hitShipDto)) {
+                          int shipX = position[0];
+                          int shipY = position[1];
+
+                          // Проверяем все соседние клетки
+                          for (int dx = -1; dx <= 1; dx++) {
+                              for (int dy = -1; dy <= 1; dy++) {
+                                  int nx = shipX + dx;
+                                  int ny = shipY + dy;
+
+                                  // Проверяем границы поля
+                                  if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
+                                      // Если клетка пустая (0), помечаем её как промах (2)
+                                      if (targetBoard[ny][nx] == 0) {
+                                          targetBoard[ny][nx] = 2;
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+             }
 
             // Проверяем, закончилась ли игра
             gameOver = targetShips.stream().allMatch(ship -> {
