@@ -513,12 +513,10 @@ public class GameService {
                     } else {
                          logger.info("[convertToGameDto] Identified as Singleplayer Computer Board");
                          // Для компьютера показываем только подбитые корабли во время игры, все после игры
-                          if (game.getGameState() == GameState.PLAYER_WON || game.getGameState() == GameState.COMPUTER_WON) {
-                             List<Ship> ships = objectMapper.readValue(board.getShipsData(), 
+                          if (game.getGameState() != GameState.WAITING) {
+                             List<Ship> ships = objectMapper.readValue(board.getShipsData(),
                                      objectMapper.getTypeFactory().constructCollectionType(List.class, Ship.class));
                               boardDto.setShips(ships.stream().map(this::convertToShipDto).collect(Collectors.toList()));
-                          } else {
-                              boardDto.setShips(new ArrayList<>()); // Во время игры не показываем корабли компьютера
                           }
                          dto.setComputerBoard(boardDto);
                     }
@@ -696,6 +694,13 @@ public class GameService {
             }
         }
         
+        // Сохраняем изменения в доске компьютера (даже при промахе)
+        try {
+            computerBoard.setShipsData(objectMapper.writeValueAsString(computerShips));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Ошибка при сохранении данных о кораблях компьютера", e);
+        }
+        
         // Проверяем, закончилась ли игра (все ли корабли потоплены)
         boolean gameOver = true;
         for (Ship ship : computerShips) {
@@ -853,7 +858,7 @@ public class GameService {
                                 // Проверяем границы поля
                                 if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
                                     // Если клетка пустая (0), помечаем её как промах (2)
-                                    if (boardArray[ny][nx] == 0) {
+                                    if (boardArray[ny][nx] < 2) {
                                         boardArray[ny][nx] = 2;
                                     }
                                 }
@@ -1352,7 +1357,7 @@ public class GameService {
                                   // Проверяем границы поля
                                   if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
                                       // Если клетка пустая (0), помечаем её как промах (2)
-                                      if (targetBoard[ny][nx] == 0) {
+                                      if (targetBoard[ny][nx] < 2) {
                                           targetBoard[ny][nx] = 2;
                                       }
                                   }
