@@ -37,6 +37,15 @@ public class GameDto {
     @Schema(description = "Код комнаты для мультиплеерной игры", example = "ABC123")
     private String gameCode;
 
+    @Schema(description = "Результат последнего хода - попадание", example = "true")
+    private boolean lastMoveHit;
+
+    @Schema(description = "Результат последнего хода - потопление корабля", example = "false")
+    private boolean lastMoveSunk;
+
+    @Schema(description = "Результат последнего хода - конец игры", example = "false")
+    private boolean lastMoveGameOver;
+
     public void setPlayerBoard(GameBoardDto playerBoard) {
         this.playerBoard = playerBoard;
     }
