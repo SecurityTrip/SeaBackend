@@ -46,6 +46,13 @@ public class GameDto {
     @Schema(description = "Результат последнего хода - конец игры", example = "false")
     private boolean lastMoveGameOver;
 
+    // Новые поля для мультиплеера: имя и аватар противника
+    @Schema(description = "Имя противника (для мультиплеера)", example = "user123")
+    private String opponentUsername;
+
+    @Schema(description = "ID аватара противника (для мультиплеера)", example = "2")
+    private Integer opponentAvatarId;
+
     public void setPlayerBoard(GameBoardDto playerBoard) {
         this.playerBoard = playerBoard;
     }

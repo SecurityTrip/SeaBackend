@@ -24,6 +24,9 @@ import java.util.Map;
 @Service
 public class GameService {
 
+    @Autowired
+    private UserService userService;
+
     private static final Logger logger = LoggerFactory.getLogger(GameService.class);
     
     @Autowired
@@ -1489,6 +1492,7 @@ public class GameService {
             return cachedState;
         }
         
+
         String cleanCode = gameCode;
         MultiplayerRoomEntity entity = multiplayerRoomRepository.findById(cleanCode)
                 .orElseThrow(() -> new RuntimeException("Комната не найдена"));
@@ -1510,6 +1514,25 @@ public class GameService {
             gameState.setId(userId);
             gameState.setMode(GameMode.multiplayer);
             gameState.setGameCode(cleanCode);
+
+            // --- Добавляем информацию о противнике ---
+            Long opponentId = null;
+            if (isPlayer1 && entity.getPlayer2Id() != null) {
+                opponentId = entity.getPlayer2Id();
+            } else if (isPlayer2) {
+                opponentId = entity.getPlayer1Id();
+            }
+            if (opponentId != null) {
+                try {
+                    ru.securitytrip.backend.model.User opponent = userService.findById(opponentId);
+                    if (opponent != null) {
+                        gameState.setOpponentUsername(opponent.getUsername());
+                        gameState.setOpponentAvatarId(opponent.getAvatarId());
+                    }
+                } catch (Exception e) {
+                    logger.warn("Не удалось получить данные противника: {}", e.getMessage());
+                }
+            }
 
             if (entity.getPlayer2Id() == null) {
                 gameState.setGameState(GameState.WAITING);
