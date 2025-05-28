@@ -748,7 +748,7 @@ public class GameService {
      */
     private void computerMove(Game game, int moveCount) {
         // Защита от бесконечной рекурсии - не более 10 последовательных ходов компьютера
-        if (moveCount >= 10) {
+        if (moveCount >= 15) {
             logger.warn("Достигнуто максимальное количество последовательных ходов компьютера ({}), передаем ход игроку", moveCount);
             game.toggleTurn();
             gameRepository.save(game);
@@ -878,8 +878,29 @@ public class GameService {
             // Обновляем доску
             playerBoard.setBoardState(playerBoard.convertBoardToString(boardArray));
             
-            // Если был HARD уровень и попадание, сохраняем последний удачный выстрел
-            if (hit && difficultyLevel == DifficultyLevel.HARD) {
+
+            // Если был HARD уровень и попадание, добавляем в pendingHits
+            if (difficultyLevel == DifficultyLevel.HARD && hit) {
+                // Добавляем попадание, если оно не потоплено
+                boolean isShipSunk = true;
+                for (boolean hitStatus : hitShip.getHits()) {
+                    if (!hitStatus) {
+                        isShipSunk = false;
+                        break;
+                    }
+                }
+                if (!isShipSunk) {
+                    boolean already = false;
+                    for (Game.PendingHit ph : game.getPendingHits()) {
+                        if (ph.getX() == x && ph.getY() == y) {
+                            already = true;
+                            break;
+                        }
+                    }
+                    if (!already) {
+                        game.getPendingHits().add(new Game.PendingHit(x, y));
+                    }
+                }
                 game.setLastHitX(x);
                 game.setLastHitY(y);
             }
@@ -900,7 +921,23 @@ public class GameService {
                         break;
                     }
                 }
-                
+                // Если корабль потоплен, удаляем все связанные pendingHits
+                boolean isShipSunk = true;
+                for (boolean hitStatus : hitShip.getHits()) {
+                    if (!hitStatus) {
+                        isShipSunk = false;
+                        break;
+                    }
+                }
+                if (isShipSunk && difficultyLevel == DifficultyLevel.HARD) {
+                    List<int[]> coords = hitShip.getCoordinates();
+                    game.getPendingHits().removeIf(ph -> {
+                        for (int[] c : coords) {
+                            if (ph.getX() == c[0] && ph.getY() == c[1]) return true;
+                        }
+                        return false;
+                    });
+                }
                 // Если игра закончилась, обновляем статус
                 if (gameOver) {
                     game.setGameState(GameState.COMPUTER_WON);
@@ -912,7 +949,7 @@ public class GameService {
                     return;
                 }
             } else {
-                // Сбрасываем последний удачный выстрел, если это был промах на HARD
+                // Если промах на HARD, не сбрасываем pendingHits, но сбрасываем lastHitX/lastHitY
                 if (difficultyLevel == DifficultyLevel.HARD) {
                     game.setLastHitX(-1);
                     game.setLastHitY(-1);
@@ -930,7 +967,7 @@ public class GameService {
     private boolean makeRandomShot(int[][] boardArray, int[] coordinates) {
         boolean validMove = false;
         int attempts = 0;
-        int maxAttempts = 100; // Предотвращение бесконечного цикла
+        int maxAttempts = 500; // Предотвращение бесконечного цикла
         
         while (!validMove && attempts < maxAttempts) {
             int x = random.nextInt(10);
@@ -983,18 +1020,30 @@ public class GameService {
     // Метод для умного выстрела с добиванием кораблей (для HARD)
     private boolean makeSmartShot(int[][] boardArray, int[] coordinates, Game game) {
         boolean validMove = false;
-        
-        // Пытаемся атаковать вокруг последнего попадания, если оно было
-        if (game.getLastHitX() >= 0 && game.getLastHitY() >= 0) {
-            // Направления для проверки (вверх, вправо, вниз, влево)
+        // Если есть "висящие" попадания, пытаемся добить их
+        List<Game.PendingHit> pendingHits = game.getPendingHits();
+        outer:
+        for (Game.PendingHit ph : pendingHits) {
             int[][] directions = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
-            
+            for (int[] dir : directions) {
+                int newX = ph.getX() + dir[0];
+                int newY = ph.getY() + dir[1];
+                if (newX >= 0 && newX < 10 && newY >= 0 && newY < 10 &&
+                        boardArray[newY][newX] != 2 && boardArray[newY][newX] != 3) {
+                    coordinates[0] = newX;
+                    coordinates[1] = newY;
+                    validMove = true;
+                    break outer;
+                }
+            }
+        }
+        // Если нет pendingHits или не нашли подходящую клетку, используем lastHitX/lastHitY
+        if (!validMove && game.getLastHitX() >= 0 && game.getLastHitY() >= 0) {
+            int[][] directions = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
             for (int[] dir : directions) {
                 int newX = game.getLastHitX() + dir[0];
                 int newY = game.getLastHitY() + dir[1];
-                
-                // Проверяем, что координаты в пределах поля и клетка не простреляна
-                if (newX >= 0 && newX < 10 && newY >= 0 && newY < 10 && 
+                if (newX >= 0 && newX < 10 && newY >= 0 && newY < 10 &&
                         boardArray[newY][newX] != 2 && boardArray[newY][newX] != 3) {
                     coordinates[0] = newX;
                     coordinates[1] = newY;
@@ -1003,13 +1052,11 @@ public class GameService {
                 }
             }
         }
-        
         // Если не удалось найти умный ход, делаем случайный
         if (!validMove) {
-            logger.info("Не удалось найти подходящую клетку вокруг предыдущего попадания, переключаемся на случайную");
+            logger.info("Не удалось найти подходящую клетку для добивания, переключаемся на случайную");
             return makeRandomShot(boardArray, coordinates);
         }
-        
         return validMove;
     }
     

@@ -28,6 +28,38 @@ public class Game {
     // Координаты последнего удачного выстрела (для ИИ сложного уровня)
     private int lastHitX = -1;
     private int lastHitY = -1;
+
+    // Список всех непотопленных попаданий (для умного добивания)
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "game_pending_hits", joinColumns = @JoinColumn(name = "game_id"))
+    private List<PendingHit> pendingHits = new ArrayList<>();
+
+    @Embeddable
+    @Getter
+    @Setter
+    public static class PendingHit {
+        private int x;
+        private int y;
+
+        public PendingHit() {}
+        public PendingHit(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            PendingHit that = (PendingHit) o;
+            return x == that.x && y == that.y;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * x + y;
+        }
+    }
     
     // true - ход игрока, false - ход компьютера
     private boolean playerTurn = true;
