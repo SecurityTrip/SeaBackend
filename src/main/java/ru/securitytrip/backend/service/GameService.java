@@ -299,53 +299,52 @@ public class GameService {
         
         return ships;
     }
-    
-    // Метод для асимметричной расстановки кораблей (для MEDIUM)
+
     private List<Ship> generateAsymmetricStrategy() {
         List<Ship> ships = new ArrayList<>();
         int[][] board = new int[10][10];
-        
-        // Выбираем "плотную" зону, где будет больше кораблей
-        int denseZoneX = random.nextInt(5); // 0-4 для левой части доски
-        int denseZoneY = random.nextInt(5); // 0-4 для верхней части доски
-        
-        // Для каждого стандартного размера корабля
+
+        // Жестко выбираем угол — например, левый верхний (0, 0)
+        // Можно изменить на random.nextInt(4), если хочешь случайный угол
+        int corner = random.nextInt(4);
+
+        int baseX = (corner == 1 || corner == 3) ? 5 : 0; // правые углы — X от 5
+        int baseY = (corner == 2 || corner == 3) ? 5 : 0; // нижние углы — Y от 5
+
         for (int shipSize : STANDARD_SHIP_SIZES) {
             boolean placed = false;
             int attempts = 0;
-            
-            while (!placed && attempts < 100) {
-                int x, y;
+
+            while (!placed && attempts < 1000) {
                 boolean horizontal = random.nextBoolean();
-                
-                // Для кораблей размером 3-4 предпочитаем плотную зону
-                if (shipSize >= 3 && random.nextInt(10) < 7) { // 70% шанс
-                    x = denseZoneX + random.nextInt(5); // плотная зона по X (5x5 клеток)
-                    y = denseZoneY + random.nextInt(5); // плотная зона по Y
+                int x, y;
+
+                // Размещаем только в 5x5 области, строго в выбранном углу
+                if (horizontal) {
+                    x = baseX + random.nextInt(Math.max(1, 6 - shipSize)); // чтобы не выходить за край
+                    y = baseY + random.nextInt(5);
                 } else {
-                    // Для остальных - вся доска
-                    x = random.nextInt(10);
-                    y = random.nextInt(10);
+                    x = baseX + random.nextInt(5);
+                    y = baseY + random.nextInt(Math.max(1, 6 - shipSize));
                 }
-                
+
                 if (canPlaceShip(board, x, y, shipSize, horizontal)) {
                     placeShipOnBoard(board, x, y, shipSize, horizontal);
                     ships.add(new Ship(shipSize, x, y, horizontal));
                     placed = true;
                 }
-                
+
                 attempts++;
             }
-            
-            // Если не удалось разместить в асимметричной стратегии
+
             if (!placed) {
-                ships.addAll(generateRandomStrategy(board, shipSize));
+                throw new RuntimeException("Не удалось разместить все корабли в углу. Места не хватает.");
             }
         }
-        
+
         return ships;
     }
-    
+
     // Метод для полностью случайной расстановки кораблей (для HARD)
     private List<Ship> generateRandomStrategy() {
         List<Ship> ships = new ArrayList<>();
