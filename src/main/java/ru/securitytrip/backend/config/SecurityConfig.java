@@ -21,6 +21,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import ru.securitytrip.backend.jwt.JwtTokenFilter;
 import ru.securitytrip.backend.service.UserDetailsServiceImpl;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -33,8 +34,8 @@ public class SecurityConfig {
 
     @Autowired
     private JwtTokenFilter jwtTokenFilter;
-    
-    // Массив URL-путей, которые будут доступны без аутентификации
+
+    // Публичные URL
     private static final String[] PUBLIC_URLS = {
             "/auth/**",
             "/v3/api-docs/**",
@@ -42,6 +43,9 @@ public class SecurityConfig {
             "/swagger-ui.html",
             "/swagger-resources/**",
             "/webjars/**",
+            "/v2/api-docs",
+            "/configuration/ui",
+            "/configuration/security",
             "/actuator/**",
             "/ws/**",
             "/ws"
@@ -50,28 +54,26 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(AbstractHttpConfigurer::disable)
-            .cors(c -> c.configurationSource(corsConfigurationSource()))
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> 
-                auth.
-                        requestMatchers(PUBLIC_URLS).permitAll()
-                    .anyRequest().authenticated()
-            );
-        
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(c -> c.configurationSource(corsConfigurationSource())) // Включение CORS
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth ->
+                        auth.requestMatchers(PUBLIC_URLS).permitAll()
+                                .anyRequest().authenticated()
+                );
+
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(jwtTokenFilter, UsernamePasswordAuthenticationFilter.class);
-        
+
         return http.build();
     }
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        
         authProvider.setUserDetailsService(userDetailsService);
         authProvider.setPasswordEncoder(passwordEncoder());
-        
         return authProvider;
     }
 
@@ -88,10 +90,25 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+
+        // Разрешаем ВСЕ источники
         configuration.setAllowedOriginPatterns(List.of("*"));
+
+        // Разрешаем ВСЕ методы
         configuration.setAllowedMethods(List.of("*"));
+
+        // Разрешаем ВСЕ заголовки
         configuration.setAllowedHeaders(List.of("*"));
+
+        // Разрешаем передачу кук и авторизационных данных
         configuration.setAllowCredentials(true);
+
+        // Устанавливаем максимальное время кэширования preflight запросов
+        configuration.setMaxAge(3600L);
+
+        // Разрешаем ВСЕ экспортируемые заголовки
+        configuration.setExposedHeaders(List.of("*"));
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
