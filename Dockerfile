@@ -30,7 +30,7 @@ ARG JAR_FILE=build/libs/*.jar
 COPY --from=build /home/gradle/project/${JAR_FILE} app.jar
 
 # Expose default Spring Boot port
-EXPOSE 80
+EXPOSE 443
 
 # Run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
