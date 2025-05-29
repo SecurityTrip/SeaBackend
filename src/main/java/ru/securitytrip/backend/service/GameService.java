@@ -13,13 +13,9 @@ import ru.securitytrip.backend.repository.GameBoardRepository;
 import ru.securitytrip.backend.repository.GameRepository;
 import ru.securitytrip.backend.repository.MultiplayerRoomRepository;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Map;
 
 @Service
 public class GameService {
@@ -304,45 +300,69 @@ public class GameService {
         List<Ship> ships = new ArrayList<>();
         int[][] board = new int[10][10];
 
-        // Жестко выбираем угол — например, левый верхний (0, 0)
-        // Можно изменить на random.nextInt(4), если хочешь случайный угол
-        int corner = random.nextInt(4);
-
-        int baseX = (corner == 1 || corner == 3) ? 5 : 0; // правые углы — X от 5
-        int baseY = (corner == 2 || corner == 3) ? 5 : 0; // нижние углы — Y от 5
+        // Выбираем угол: 0 — ЛВ, 1 — ПВ, 2 — ЛН, 3 — ПН
+        int corner = random.nextInt(4); // Или random.nextInt(4) — если хочешь случайный угол
+        int baseX = (corner == 1 || corner == 3) ? 9 : 0;
+        int baseY = (corner == 2 || corner == 3) ? 9 : 0;
 
         for (int shipSize : STANDARD_SHIP_SIZES) {
             boolean placed = false;
-            int attempts = 0;
+            int zoneSize = 5;
 
-            while (!placed && attempts < 1000) {
-                boolean horizontal = random.nextBoolean();
-                int x, y;
+            while (!placed && zoneSize <= 10) {
+                List<int[]> positions = generateZoneCoordinates(baseX, baseY, zoneSize, shipSize);
 
-                // Размещаем только в 5x5 области, строго в выбранном углу
-                if (horizontal) {
-                    x = baseX + random.nextInt(Math.max(1, 6 - shipSize)); // чтобы не выходить за край
-                    y = baseY + random.nextInt(5);
-                } else {
-                    x = baseX + random.nextInt(5);
-                    y = baseY + random.nextInt(Math.max(1, 6 - shipSize));
+                // Сортировка по расстоянию до угла
+                positions.sort(Comparator.comparingInt(p -> distanceToCorner(p[0], p[1], baseX, baseY)));
+
+                for (int[] pos : positions) {
+                    int x = pos[0];
+                    int y = pos[1];
+                    boolean horizontal = pos[2] == 1;
+
+                    if (canPlaceShip(board, x, y, shipSize, horizontal)) {
+                        placeShipOnBoard(board, x, y, shipSize, horizontal);
+                        ships.add(new Ship(shipSize, x, y, horizontal));
+                        placed = true;
+                        break;
+                    }
                 }
 
-                if (canPlaceShip(board, x, y, shipSize, horizontal)) {
-                    placeShipOnBoard(board, x, y, shipSize, horizontal);
-                    ships.add(new Ship(shipSize, x, y, horizontal));
-                    placed = true;
+                if (!placed) {
+                    zoneSize++; // Увеличиваем зону
                 }
-
-                attempts++;
             }
 
             if (!placed) {
-                throw new RuntimeException("Не удалось разместить все корабли в углу. Места не хватает.");
+                throw new RuntimeException("Не удалось разместить корабль даже при максимальной зоне.");
             }
         }
 
         return ships;
+    }
+
+    // Генерация координат с ориентацией в зоне N×N начиная от угла
+    private List<int[]> generateZoneCoordinates(int baseX, int baseY, int zoneSize, int shipSize) {
+        List<int[]> coords = new ArrayList<>();
+
+        int startX = baseX <= 0 ? 0 : 9 - (zoneSize - 1);
+        int startY = baseY <= 0 ? 0 : 9 - (zoneSize - 1);
+
+        for (int x = startX; x < startX + zoneSize; x++) {
+            for (int y = startY; y < startY + zoneSize; y++) {
+                // Горизонтально
+                if (x + shipSize <= 10) coords.add(new int[]{x, y, 1});
+                // Вертикально
+                if (y + shipSize <= 10) coords.add(new int[]{x, y, 0});
+            }
+        }
+
+        return coords;
+    }
+
+    // Вычисление расстояния от точки до выбранного угла
+    private int distanceToCorner(int x, int y, int cornerX, int cornerY) {
+        return Math.abs(x - cornerX) + Math.abs(y - cornerY);
     }
 
     // Метод для полностью случайной расстановки кораблей (для HARD)
